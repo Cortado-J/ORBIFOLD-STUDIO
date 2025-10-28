@@ -1,3 +1,21 @@
+/*
+ * Genome model overview
+ * ---------------------
+ * Each wallpaper genome encapsulates the traits that drive rendering:
+ *   - group: wallpaper symmetry group id ("632", "442", "333", "2222").
+ *   - palette: key into the shared palettes map.
+ *   - motifScale, rotation, hueShift: numeric controls for motif tiling and colour.
+ *   - shapes: ordered array of motif parts, each with type, curveBias, fatness.
+ *   - numShapes mirrors shapes.length for quick reference during mutation/mixing.
+ *
+ * `withMeta` decorates raw genomes with UI bookkeeping (id, timestamps, selectCount).
+ * `randomGenome` seeds a fresh genome with randomly chosen traits.
+ * `mutateGenome` produces a tweaked clone, respecting bounds so changes stay viewable.
+ * `mixGenomes` (and legacy `combineGenomes`) fuse multiple parents using either
+ * random-trait selection or averaging, with optional palette override, then apply
+ * a light mutation pass for variation.
+ * Supporting helpers (`genomeHash`, etc.) keep previews deterministic.
+ */
 let nextId = 1;
 
 function withMeta(g) {

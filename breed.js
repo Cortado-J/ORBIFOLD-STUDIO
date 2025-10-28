@@ -1,3 +1,16 @@
+/*
+ * Breeding helpers overview
+ * -------------------------
+ * UI interactions feed selected parent genomes through this module to produce
+ * new offspring previews and manage pool capacity:
+ *   - `buildOffspringPreview` generates up to four candidate children based on the
+ *     current selection state (random, cloned, or mixed using global controls).
+ *   - `sendLiveOffspringToPool` moves user-approved previews into the pool and
+ *     updates selection statistics before enforcing the grid capacity.
+ *   - `enforceCapacity` trims the pool when it exceeds the visible grid, biasing
+ *     removals toward low-engagement patterns while preserving explicitly
+ *     protected parents.
+ */
 function buildOffspringPreview() {
   let children = [];
   if (selectedParents.length === 0) {
