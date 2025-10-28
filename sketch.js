@@ -10,6 +10,7 @@ const APP_VERSION = "v1.0.4";
 // Parent selection + control panel state
 let selectedParents = []; // array of genomes currently selected (max 4)
 let mutationRate = 0.25; // 0..1
+let pendingPreview = null; // { action, label, items: [{ genome, parents }], index }
 
 // Layout caches
 let wq, hq;
@@ -17,9 +18,16 @@ let thumbH = 100;
 
 // Grid and layout constants
 const GRID_COLS = 6;
-const GRID_ROWS = 6; // changed from 8 to 6
+const GRID_ROWS = 3;
 const HEADER_H = 48; // title bar height
 const PANEL_H = 80;  // control panel height
+
+const ACTION_LABELS = {
+  random: "Random",
+  clone: "Clone",
+  average: "Average",
+  select: "Select",
+};
 
 // UI hit regions (computed each frame)
 let uiRegions = {
@@ -51,66 +59,135 @@ function setup() {
 }
 
 function handleAction(action) {
-  const created = [];
+  if (!isActionEnabled(action)) return;
+
+  const parents = [...selectedParents];
+  const items = [];
+
   switch (action) {
-    case "random":
-      created.push(withMeta(randomGenome()));
+    case "random": {
+      items.push({ genome: withMeta(randomGenome()), parents: [] });
       break;
-    case "clone":
-      if (selectedParents.length === 0) {
-        console.log("Clone requires at least one selected parent.");
-        return;
-      }
-      for (const parent of selectedParents) {
-        created.push(withMeta(mutateGenome(parent, mutationRate)));
+    }
+    case "clone": {
+      for (const parent of parents) {
+        const clone = withMeta(mutateGenome(parent, mutationRate));
+        items.push({ genome: clone, parents: [parent] });
       }
       break;
-    case "average":
-      if (selectedParents.length < 2) {
-        console.log("Average breeding requires at least two parents.");
-        return;
-      }
-      created.push(withMeta(mixGenomes(selectedParents, {
+    }
+    case "average": {
+      const child = withMeta(mixGenomes(parents, {
         method: "average",
         mutationRate,
         paletteOverride: -1,
-      })));
+      }));
+      items.push({ genome: child, parents });
       break;
-    case "select":
-      if (selectedParents.length === 0) {
-        console.log("Select breeding requires at least one parent.");
-        return;
-      }
-      created.push(withMeta(mixGenomes(selectedParents, {
+    }
+    case "select": {
+      const child = withMeta(mixGenomes(parents, {
         method: "random-trait",
         mutationRate,
         paletteOverride: -1,
-      })));
+      }));
+      items.push({ genome: child, parents });
       break;
+    }
     default:
       return;
   }
 
-  if (created.length === 0) return;
+  if (items.length === 0) return;
 
-  for (const child of created) {
-    pool.push(child);
-  }
-
-  if (selectedParents.length > 0 && action !== "random") {
-    for (const parent of selectedParents) {
-      parent.selectCount = (parent.selectCount || 0) + 1;
-    }
-  }
-
-  enforceCapacity(GRID_COLS * GRID_ROWS, selectedParents);
-  gen++;
+  pendingPreview = {
+    action,
+    label: ACTION_LABELS[action] || action,
+    items,
+    index: 0,
+  };
   drawScreen();
 }
 
 function keyPressed() {
-  if (key === "r" || key === "R") return handleAction("random");
-  if (key === "c" || key === "C") return handleAction("clone");
-  if (key === "a" || key === "A") return handleAction("average");
-  if (key === "s" || key === "S") return handleAction("select");
+  if (previewActive()) {
+    if (key === " ") {
+      acceptPreview();
+      return;
+    }
+    const nextAction = keyToAction(key);
+    const shouldRedraw = discardPreview(false);
+    if (nextAction) handleAction(nextAction);
+    else if (shouldRedraw) drawScreen();
+    return;
+  }
+
+  const action = keyToAction(key);
+  if (action) handleAction(action);
+}
+
+function previewActive() {
+  return pendingPreview && pendingPreview.items && pendingPreview.index < pendingPreview.items.length;
+}
+
+function currentPreviewItem() {
+  if (!previewActive()) return null;
+  return pendingPreview.items[pendingPreview.index];
+}
+
+function acceptPreview() {
+  if (!previewActive()) return;
+  const item = pendingPreview.items[pendingPreview.index];
+  pool.push(item.genome);
+
+  if (item.parents && item.parents.length > 0) {
+    const seen = new Set();
+    for (const parent of item.parents) {
+      if (parent && !seen.has(parent)) {
+        parent.selectCount = (parent.selectCount || 0) + 1;
+        seen.add(parent);
+      }
+    }
+  }
+
+  enforceCapacity(GRID_COLS * GRID_ROWS, selectedParents);
+
+  pendingPreview.index++;
+  if (!previewActive()) {
+    pendingPreview = null;
+    gen++;
+  }
+  drawScreen();
+}
+
+function discardPreview(redraw = true) {
+  if (!previewActive()) return false;
+  pendingPreview = null;
+  if (redraw) drawScreen();
+  return true;
+}
+
+function keyToAction(k) {
+  if (!k) return null;
+  const lower = k.toLowerCase();
+  if (lower === "r") return "random";
+  if (lower === "c") return "clone";
+  if (lower === "a") return "average";
+  if (lower === "s") return "select";
+  return null;
+}
+
+function isActionEnabled(action) {
+  switch (action) {
+    case "random":
+      return true;
+    case "clone":
+      return selectedParents.length > 0;
+    case "average":
+      return selectedParents.length >= 2;
+    case "select":
+      return selectedParents.length > 0;
+    default:
+      return false;
+  }
 }

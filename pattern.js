@@ -112,3 +112,30 @@ function drawShapeVariant(pg, type, s, bias, fat) {
   }
   pg.endShape(CLOSE);
 }
+
+function estimateCellSize(g) {
+  const a = g?.motifScale || 1;
+  switch (g?.group) {
+    case "632":
+      return { w: a * sqrt(3), h: a * 1.5 };
+    case "442":
+      return { w: a, h: a };
+    case "333":
+      return { w: a, h: a * sqrt(3) / 2 };
+    case "2222":
+      return { w: a, h: a * 0.6 };
+    default:
+      return { w: a, h: a };
+  }
+}
+
+function displayScaleForPattern(g, width, height, repeats = 3) {
+  const { w: cellW, h: cellH } = estimateCellSize(g);
+  const targetRepeats = max(1, repeats);
+  const safeCW = max(1, cellW || 1);
+  const safeCH = max(1, cellH || 1);
+  const scaleX = width / (targetRepeats * safeCW);
+  const scaleY = height / (targetRepeats * safeCH);
+  const scale = min(1, scaleX, scaleY);
+  return max(scale, 0.0001);
+}

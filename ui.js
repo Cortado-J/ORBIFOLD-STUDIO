@@ -20,7 +20,9 @@ function drawPoolGrid() {
   const gap = max(4, s * 0.08);
   const tile = max(10, s - gap);
   const originX = (width - cols * s) / 2;
-  const originY = HEADER_H + (gridH - rows * s) / 2;
+  const originYBase = HEADER_H + gap / 2;
+  const maxOriginY = HEADER_H + gridH - rows * s;
+  const originY = min(originYBase, maxOriginY);
   for (let i = 0; i < min(pool.length, cols * rows); i++) {
     const r = floor(i / cols);
     const c = i % cols;
@@ -36,6 +38,8 @@ function drawQuadrant(g, x, y, w, h, isSelected = false, idx = 0) {
   let pg = createGraphics(w, h);
   pg.background(240);
   pg.translate(w / 2, h / 2);
+  const baseScale = displayScaleForPattern ? displayScaleForPattern(g, w, h, 3) : 1;
+  if (baseScale !== 1) pg.scale(baseScale);
   drawWallpaperOn(pg, g);
   image(pg, x, y);
   
@@ -74,63 +78,82 @@ function drawControls() {
   noFill();
   rect(0, y, width, h);
 
-  // Selected count just beneath the pool
-  noStroke();
-  fill(0);
-  textAlign(LEFT, CENTER);
-  textSize(16);
-  text(`Selected parents: ${selectedParents.length}`, 16, y + 22);
+  const padding = 16;
+  const buttonW = 160;
+  const buttonH = 44;
+  const buttonGap = 12;
+  const columnX = padding;
+  let buttonY = y + padding;
 
-  // Instructions block
-  textSize(14);
-  const instructions = [
-    "Keyboard shortcuts:",
-    "R – Random: create a random child.",
-    "C – Clone: mutate each selected parent.",
-    "A – Average: average the selected parents.",
-    "S – Select: mix traits from selected parents.",
-  ];
-  let textY = y + 52;
-  for (const line of instructions) {
-    text(line, 16, textY);
-    textY += 20;
-  }
-
-  // Action buttons row
+  // Action buttons column
   const actions = [
     { key: "R", label: "Random", action: "random", enabled: true },
     { key: "C", label: "Clone", action: "clone", enabled: selectedParents.length > 0 },
     { key: "A", label: "Average", action: "average", enabled: selectedParents.length >= 2 },
     { key: "S", label: "Select", action: "select", enabled: selectedParents.length > 0 },
   ];
-  const buttonH = 44;
-  const buttonW = 140;
-  const buttonGap = 16;
-  const totalW = actions.length * buttonW + (actions.length - 1) * buttonGap;
-  const startX = (width - totalW) / 2;
-  const buttonY = y + h - buttonH - 24;
-
   textAlign(CENTER, CENTER);
   textSize(16);
-  for (let i = 0; i < actions.length; i++) {
-    const { action, label, enabled, key } = actions[i];
-    const bx = startX + i * (buttonW + buttonGap);
-    const region = { x: bx, y: buttonY, w: buttonW, h: buttonH };
+  for (const { action, label, key, enabled } of actions) {
+    const region = { x: columnX, y: buttonY, w: buttonW, h: buttonH, enabled: false };
+    region.enabled = Boolean(isActionEnabled(action));
     uiRegions.actionButtons[action] = region;
     stroke(0);
-    fill(enabled ? "#06d6a0" : 200);
+    fill(region.enabled ? "#06d6a0" : 200);
     rect(region.x, region.y, region.w, region.h, 8);
     noStroke();
-    fill(enabled ? 255 : 80);
+    fill(region.enabled ? 255 : 80);
     text(`${label} (${key})`, region.x + region.w / 2, region.y + region.h / 2);
+    buttonY += buttonH + buttonGap;
   }
 
-  // Generation counter on the right edge
-  fill(0);
+  // Preview area
+  const previewX = columnX + buttonW + 32;
+  const previewY = y + padding;
+  const previewW = width - previewX - padding;
+  const previewH = h - padding * 2;
+
+  stroke(0);
+  fill(245);
+  rect(previewX, previewY, previewW, previewH, 8);
+
   noStroke();
-  textAlign(RIGHT, CENTER);
+  fill(0);
+  textAlign(LEFT, TOP);
+  textSize(16);
+  text(`Selected parents: ${selectedParents.length}`, previewX + 16, previewY + 16);
+
   textSize(14);
-  text(`Gen ${gen}`, width - 20, y + 22);
+  const infoY = previewY + 44;
+  if (previewActive()) {
+    const total = pendingPreview ? pendingPreview.items.length : 1;
+    const index = pendingPreview ? pendingPreview.index + 1 : 1;
+    const label = pendingPreview ? pendingPreview.label : "Preview";
+    text(`${label} offspring ${index}/${total}`, previewX + 16, infoY);
+    text("Press Space to add, any other key to cancel.", previewX + 16, infoY + 20);
+
+    const item = currentPreviewItem();
+    if (item && item.genome) {
+      const artSize = min(previewW - 40, previewH - 96);
+      const artX = previewX + (previewW - artSize) / 2;
+      const artY = previewY + previewH - artSize - 20;
+      const pg = createGraphics(artSize, artSize);
+      pg.background(240);
+      pg.translate(pg.width / 2, pg.height / 2);
+      const scaleFactor = displayScaleForPattern ? displayScaleForPattern(item.genome, artSize, artSize, 3) : 1;
+      if (scaleFactor !== 1) pg.scale(scaleFactor);
+      drawWallpaperOn(pg, item.genome);
+      image(pg, artX, artY);
+    }
+  } else {
+    text("Choose an action or press R/C/A/S to preview.", previewX + 16, infoY);
+    text("Press Space to confirm a preview when shown.", previewX + 16, infoY + 20);
+  }
+
+  // Generation counter on the right edge within preview panel
+  textAlign(RIGHT, TOP);
+  textSize(14);
+  text(`Gen ${gen}`, previewX + previewW - 16, previewY + 16);
 }
 
 function drawTitle() {
@@ -162,10 +185,11 @@ function mousePressed() {
   // Action buttons
   if (uiRegions.actionButtons) {
     for (const [action, region] of Object.entries(uiRegions.actionButtons)) {
-      if (region && pointInRect(mouseX, mouseY, region)) {
-        handleAction(action);
-        return;
-      }
+      if (!region || !pointInRect(mouseX, mouseY, region)) continue;
+      if (!region.enabled) return;
+      if (previewActive()) discardPreview(false);
+      handleAction(action);
+      return;
     }
   }
 
@@ -179,12 +203,14 @@ function mousePressed() {
     const s = min(cellWBase, cellHBase);
     const gap = max(4, s * 0.08);
     const originX = (width - cols * s) / 2;
-    const originY = HEADER_H + (gridH - rows * s) / 2;
-    if (mouseX >= originX && mouseX < originX + cols * s && mouseY >= originY && mouseY < originY + rows * s) {
+    const originYBase = HEADER_H + gap / 2;
+    const maxOriginY = HEADER_H + gridH - rows * s;
+    const originYClamped = min(originYBase, maxOriginY);
+    if (mouseX >= originX && mouseX < originX + cols * s && mouseY >= originYClamped && mouseY < originYClamped + rows * s) {
       const c = floor((mouseX - originX) / s);
-      const r = floor((mouseY - originY) / s);
+      const r = floor((mouseY - originYClamped) / s);
       const localX = (mouseX - originX) - c * s;
-      const localY = (mouseY - originY) - r * s;
+      const localY = (mouseY - originYClamped) - r * s;
       if (localX < gap / 2 || localX > s - gap / 2 || localY < gap / 2 || localY > s - gap / 2) {
         return; // click fell in the gutter between tiles
       }
