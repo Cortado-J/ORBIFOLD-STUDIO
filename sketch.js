@@ -31,7 +31,8 @@ let liveOffspring = null; // array of 4 genomes
 let liveOffspringSelected = [false, false, false, false];
 
 function panelHeight() {
-  return generateMode ? 180 : 80;
+  // Taller panel in generate mode to fit large square previews
+  return generateMode ? 260 : 80;
 }
 
 // UI hit regions (computed each frame)
@@ -207,42 +208,6 @@ function drawScreen() {
   drawTitle();
   drawPoolGrid();
   drawControls();
-  
-  // Draw live previews in Generate mode
-  if (generateMode && liveOffspring) {
-    const previewY = height - panelHeight() + 60;
-    const previewW = width / 4;
-    const previewH = 100;
-    
-    // Draw previews
-    for (let i = 0; i < 4; i++) {
-      if (!liveOffspring[i]) continue;
-      
-      const px = i * previewW;
-      const py = previewY;
-      
-      // Draw selection highlight
-      if (liveOffspringSelected[i]) {
-        fill(100, 200, 100, 100);
-        noStroke();
-        rect(px, py, previewW, previewH);
-      }
-      
-      // Draw pattern preview
-      const pg = createGraphics(100, 100);
-      drawWallpaperOn(pg, liveOffspring[i]);
-      image(pg, px + 10, py + 10, 80, 80);
-      
-      // Draw border and selection indicator
-      noFill();
-      stroke(0);
-      rect(px, py, previewW, previewH);
-      
-      // Store hit region
-      if (!uiRegions.liveOffspring) uiRegions.liveOffspring = [];
-      uiRegions.liveOffspring[i] = { x: px, y: py, w: previewW, h: previewH };
-    }
-  }
 }
 
 function drawPoolGrid() {
@@ -333,6 +298,44 @@ function drawControls() {
   }
 
   // In generate mode, show full controls and live previews
+  // Live offspring previews (draw first so controls appear on top)
+  if (!liveOffspring || liveOffspring.length !== 4) {
+    liveOffspring = buildOffspringPreview();
+    liveOffspringSelected = [false, false, false, false];
+  }
+  if (liveOffspring && liveOffspring.length === 4) {
+    const pad = 12;
+    const pw = (width - 5 * pad) / 4;
+    const ph = h - 110; // more room for top controls
+    const py = y + 92; // push previews further down
+    uiRegions.liveOffspring = [];
+    for (let i = 0; i < 4; i++) {
+      const px = pad + i * (pw + pad);
+      // Square thumbnail size and centering
+      const s = Math.min(pw, ph);
+      const sx = px + (pw - s) / 2;
+      const sy = py + (ph - s) / 2;
+
+      const pg = createGraphics(s, s);
+      pg.background(240);
+      pg.translate(pg.width / 2, pg.height / 2);
+      pg.scale(0.5);
+      drawWallpaperOn(pg, liveOffspring[i]);
+      image(pg, sx, sy);
+      // preview card border
+      stroke(0); noFill(); rect(px, py, pw, ph, 6);
+      if (liveOffspringSelected[i]) {
+        stroke("#2ecc71"); strokeWeight(3); rect(px + 3, py + 3, pw - 6, ph - 6, 6); strokeWeight(1);
+      }
+      // checkbox (top-right of card)
+      const cb = 18;
+      noStroke(); fill(liveOffspringSelected[i] ? "#2ecc71" : 255);
+      rect(px + pw - cb - 6, py + 6, cb, cb, 4);
+      stroke(0); noFill(); rect(px + pw - cb - 6, py + 6, cb, cb, 4);
+      uiRegions.liveOffspring[i] = { x: px, y: py, w: pw, h: ph };
+    }
+  }
+
   // Selected count
   noStroke();
   fill(0);
@@ -383,52 +386,17 @@ function drawControls() {
   if (paletteOverride >= 0 && paletteOverride < selectedParents.length) palLabel = `Palette: P${paletteOverride + 1}`;
   text(palLabel, palX + palW / 2, palY + palH / 2);
 
-  // Show Send to Pool button only if at least one child is selected
+  // Always show Send to Pool button (disabled if none selected)
   const anySelected = liveOffspringSelected.some(x => x);
-  if (anySelected) {
-    const gW = 180, gH = 40, gX = width - gW - 16, gY = y + h - gH - 12;
-    uiRegions.genBtn = { x: gX, y: gY, w: gW, h: gH };
-    stroke(0); fill("#06d6a0"); rect(gX, gY, gW, gH, 6);
-    noStroke(); fill(255); textAlign(CENTER, CENTER); textSize(18); text("Send to Pool", gX + gW / 2, gY + gH / 2);
-    // Generation counter
-    fill(0); noStroke(); textAlign(RIGHT, CENTER); textSize(14);
-    text(`Gen ${gen}`, gX - 10, gY + gH / 2);
-  } else {
-    uiRegions.genBtn = null;
-  }
-
-  // Live offspring previews (always show in generate mode)
-  if (!liveOffspring || liveOffspring.length !== 4) {
-    liveOffspring = buildOffspringPreview();
-    liveOffspringSelected = [false, false, false, false];
-  }
-  if (liveOffspring && liveOffspring.length === 4) {
-    const pad = 12;
-    const pw = (width - 5 * pad) / 4;
-    const ph = h - 80; // space after controls
-    const py = y + 72;
-    uiRegions.liveOffspring = [];
-    for (let i = 0; i < 4; i++) {
-      const px = pad + i * (pw + pad);
-      const pg = createGraphics(pw, ph);
-      pg.background(240);
-      pg.translate(pg.width / 2, pg.height / 2);
-      pg.scale(0.5);
-      drawWallpaperOn(pg, liveOffspring[i]);
-      image(pg, px, py);
-      // border
-      stroke(0); noFill(); rect(px, py, pw, ph, 6);
-      if (liveOffspringSelected[i]) {
-        stroke("#2ecc71"); strokeWeight(3); rect(px + 3, py + 3, pw - 6, ph - 6, 6); strokeWeight(1);
-      }
-      // checkbox
-      const cb = 18;
-      noStroke(); fill(liveOffspringSelected[i] ? "#2ecc71" : 255);
-      rect(px + pw - cb - 6, py + 6, cb, cb, 4);
-      stroke(0); noFill(); rect(px + pw - cb - 6, py + 6, cb, cb, 4);
-      uiRegions.liveOffspring[i] = { x: px, y: py, w: pw, h: ph };
-    }
-  }
+  const gW = 180, gH = 40, gX = width - gW - 16, gY = y + h - gH - 12;
+  uiRegions.genBtn = { x: gX, y: gY, w: gW, h: gH };
+  stroke(0);
+  fill(anySelected ? "#06d6a0" : 200);
+  rect(gX, gY, gW, gH, 6);
+  noStroke(); fill(anySelected ? 255 : 80); textAlign(CENTER, CENTER); textSize(18); text("Send to Pool", gX + gW / 2, gY + gH / 2);
+  // Generation counter
+  fill(0); noStroke(); textAlign(RIGHT, CENTER); textSize(14);
+  text(`Gen ${gen}`, gX - 10, gY + gH / 2);
 }
 
 function buildOffspringPreview() {
@@ -521,12 +489,6 @@ function enforceCapacity(capacity, preserveList = []) {
 }
 
 function mousePressed() {
-  // Check if we're in generate mode and clicking on save button
-  if (generateMode && uiRegions.saveBtn && pointInRect(mouseX, mouseY, uiRegions.saveBtn)) {
-    sendLiveOffspringToPool();
-    return drawScreen();
-  }
-  
   // Controls panel hit-testing
   if (uiRegions.genModeToggle && pointInRect(mouseX, mouseY, uiRegions.genModeToggle)) {
     generateMode = !generateMode;
@@ -539,9 +501,8 @@ function mousePressed() {
   // Generate new previews button
   if (uiRegions.genBtn && pointInRect(mouseX, mouseY, uiRegions.genBtn)) {
     if (generateMode) {
-      // Generate new previews
-      liveOffspring = buildOffspringPreview();
-      liveOffspringSelected = [false, false, false, false];
+      // In generate mode this button means 'Send to Pool'
+      sendLiveOffspringToPool();
     } else {
       // Enter generate mode if not already
       generateMode = true;
@@ -668,7 +629,8 @@ function createMotif(pg, g, s, palette) {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  const seedBase = ((g.id || genomeHash(g)) ^ (g.createdAt || 0)) >>> 0;
+  // Seed RNG purely from genome traits so previews and saved pool items match
+  const seedBase = genomeHash(g);
   const rng = mulberry32(seedBase);
 
   colorMode(HSB, 360, 100, 100);
