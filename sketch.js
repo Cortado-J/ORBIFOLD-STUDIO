@@ -22,8 +22,14 @@ const HEADER_H = 48; // title bar height
 const PANEL_H = 80;  // control panel height
 
 // Modal offspring preview
-let offspringPreview = null; // array of 4 genomes (no metadata yet)
-let offspringSelected = [false, false, false, false];
+// Generate mode (live preview panel)
+let generateMode = false;
+let liveOffspring = null; // array of 4 genomes
+let liveOffspringSelected = [false, false, false, false];
+
+function panelHeight() {
+  return generateMode ? 180 : 80;
+}
 
 // UI hit regions (computed each frame)
 let uiRegions = {
@@ -194,14 +200,13 @@ function drawScreen() {
   drawTitle();
   drawPoolGrid();
   drawControls();
-  if (offspringPreview) drawOffspringDialog();
 }
 
 function drawPoolGrid() {
   const cols = GRID_COLS;
   const rows = GRID_ROWS;
   const cellW = width / cols;
-  const gridH = height - HEADER_H - PANEL_H;
+  const gridH = height - HEADER_H - panelHeight();
   const cellH = gridH / rows;
   for (let i = 0; i < min(pool.length, cols * rows); i++) {
     const r = floor(i / cols);
@@ -227,22 +232,24 @@ function drawQuadrant(g, x, y, w, h, isSelected = false, idx = 0) {
   noFill();
   rect(x, y, w, h);
 
-  // Selected marker: green inset border and checkbox (match dialog style)
-  if (isSelected) {
-    stroke("#2ecc71");
-    strokeWeight(4);
-    noFill();
-    rect(x + 3, y + 3, w - 6, h - 6, 6);
+  // Selection UI only when in generate mode
+  if (generateMode) {
+    // Selected marker: green inset border and checkbox (match dialog style)
+    if (isSelected) {
+      stroke("#2ecc71");
+      strokeWeight(4);
+      noFill();
+      rect(x + 3, y + 3, w - 6, h - 6, 6);
+    }
+    // Checkbox indicator in top-right
+    const pad = 6;
+    const cb = max(14, min(w, h) * 0.12);
+    noStroke();
+    fill(isSelected ? "#2ecc71" : 255);
+    rect(x + w - pad - cb, y + pad, cb, cb, 4);
+    stroke(0); noFill();
+    rect(x + w - pad - cb, y + pad, cb, cb, 4);
   }
-
-  // Checkbox indicator in top-right
-  const pad = 6;
-  const cb = max(14, min(w, h) * 0.12);
-  noStroke();
-  fill(isSelected ? "#2ecc71" : 255);
-  rect(x + w - pad - cb, y + pad, cb, cb, 4);
-  stroke(0); noFill();
-  rect(x + w - pad - cb, y + pad, cb, cb, 4);
 
   fill(0);
   noStroke();
@@ -255,7 +262,7 @@ function drawQuadrant(g, x, y, w, h, isSelected = false, idx = 0) {
 
 function drawControls() {
   // Bottom control panel
-  const h = PANEL_H;
+  const h = panelHeight();
   const y = height - h;
   // Panel background
   noStroke();
@@ -264,7 +271,25 @@ function drawControls() {
   stroke(0);
   noFill();
   rect(0, y, width, h);
+  // Generate mode toggle (visible always)
+  const toggleW = 150, toggleH = 28, tX = width - 16 - toggleW, tY = y + 12;
+  uiRegions.genModeToggle = { x: tX, y: tY, w: toggleW, h: toggleH };
+  stroke(0); fill(generateMode ? "#ffb703" : 255); rect(tX, tY, toggleW, toggleH, 6);
+  noStroke(); fill(0); textAlign(CENTER, CENTER); textSize(14); text("Generate Mode", tX + toggleW / 2, tY + toggleH / 2);
 
+  // If not in generate mode, show only the toggle and exit
+  if (!generateMode) {
+    uiRegions.genBtn = null;
+    uiRegions.liveOffspring = null;
+    uiRegions.rateMinus = null;
+    uiRegions.ratePlus = null;
+    uiRegions.methodRandom = null;
+    uiRegions.methodAverage = null;
+    uiRegions.paletteCycle = null;
+    return;
+  }
+
+  // In generate mode, show full controls and live previews
   // Selected count
   noStroke();
   fill(0);
@@ -283,19 +308,31 @@ function drawControls() {
   stroke(0); noFill(); rect(uiRegions.rateMinus.x, uiRegions.rateMinus.y, 24, 24); rect(uiRegions.ratePlus.x, uiRegions.ratePlus.y, 24, 24);
   noStroke(); fill(0); textAlign(CENTER, CENTER); text("-", uiRegions.rateMinus.x + 12, uiRegions.rateMinus.y + 12); text("+", uiRegions.ratePlus.x + 12, uiRegions.ratePlus.y + 12);
 
-  // Method toggles
-  const mBaseX = width / 2 - 180, mY = y + 20, mW = 160, mH = 28;
-  uiRegions.methodRandom = { x: mBaseX, y: mY, w: mW, h: mH };
-  uiRegions.methodAverage = { x: mBaseX + mW + 12, y: mY, w: mW, h: mH };
+  // Method toggles (visible only when 2+ parents selected)
+  const parentCount = selectedParents.length;
+  const mBaseX = width / 2 - 200, mY = y + 20, mW = 130, mH = 28;
   function drawToggle(r, label, active) {
     stroke(0); fill(active ? "#ffb703" : 255); rect(r.x, r.y, r.w, r.h, 6);
     noStroke(); fill(0); textAlign(CENTER, CENTER); textSize(14); text(label, r.x + r.w / 2, r.y + r.h / 2);
   }
-  drawToggle(uiRegions.methodRandom, "Random per trait", combineMethod === "random-trait");
-  drawToggle(uiRegions.methodAverage, "Average traits", combineMethod === "average");
+  uiRegions.methodRandom = null;
+  uiRegions.methodAverage = null;
+  let modeDescriptor = "";
+  if (parentCount === 0) modeDescriptor = "Random";
+  else if (parentCount === 1) modeDescriptor = "Clone";
+  else modeDescriptor = "Combine";
+  // Descriptor text
+  noStroke(); fill(0); textAlign(LEFT, CENTER); textSize(14);
+  text(`Mode: ${modeDescriptor}`, mBaseX, mY - 14);
+  if (parentCount >= 2) {
+    uiRegions.methodRandom = { x: mBaseX, y: mY, w: mW, h: mH };
+    uiRegions.methodAverage = { x: mBaseX + mW + 12, y: mY, w: mW, h: mH };
+    drawToggle(uiRegions.methodRandom, "Mix", combineMethod === "random-trait");
+    drawToggle(uiRegions.methodAverage, "Average", combineMethod === "average");
+  }
 
   // Palette override cycle
-  const palX = width / 2 - 180, palY = y + 50, palW = 240, palH = 24;
+  const palX = width / 2 - 200, palY = y + 50, palW = 240, palH = 24;
   uiRegions.paletteCycle = { x: palX, y: palY, w: palW, h: palH };
   stroke(0); fill(255); rect(palX, palY, palW, palH, 6);
   noStroke(); fill(0); textAlign(CENTER, CENTER); textSize(13);
@@ -303,15 +340,94 @@ function drawControls() {
   if (paletteOverride >= 0 && paletteOverride < selectedParents.length) palLabel = `Palette: P${paletteOverride + 1}`;
   text(palLabel, palX + palW / 2, palY + palH / 2);
 
-  // Generate button
-  const gW = 160, gH = 40, gX = width - gW - 16, gY = y + (h - gH) / 2;
-  uiRegions.genBtn = { x: gX, y: gY, w: gW, h: gH };
-  stroke(0); fill("#06d6a0"); rect(gX, gY, gW, gH, 6);
-  noStroke(); fill(255); textAlign(CENTER, CENTER); textSize(18); text("Generate", gX + gW / 2, gY + gH / 2);
+  // Show Send to Pool button only if at least one child is selected
+  const anySelected = liveOffspringSelected.some(x => x);
+  if (anySelected) {
+    const gW = 180, gH = 40, gX = width - gW - 16, gY = y + h - gH - 12;
+    uiRegions.genBtn = { x: gX, y: gY, w: gW, h: gH };
+    stroke(0); fill("#06d6a0"); rect(gX, gY, gW, gH, 6);
+    noStroke(); fill(255); textAlign(CENTER, CENTER); textSize(18); text("Send to Pool", gX + gW / 2, gY + gH / 2);
+    // Generation counter
+    fill(0); noStroke(); textAlign(RIGHT, CENTER); textSize(14);
+    text(`Gen ${gen}`, gX - 10, gY + gH / 2);
+  } else {
+    uiRegions.genBtn = null;
+  }
 
   // Generation counter
   fill(0); noStroke(); textAlign(RIGHT, CENTER); textSize(14);
   text(`Gen ${gen}`, gX - 10, gY + gH / 2);
+
+  // Live offspring previews (always show in generate mode)
+  if (!liveOffspring || liveOffspring.length !== 4) {
+    liveOffspring = buildOffspringPreview();
+    liveOffspringSelected = [false, false, false, false];
+  }
+  if (liveOffspring && liveOffspring.length === 4) {
+    const pad = 12;
+    const pw = (width - 5 * pad) / 4;
+    const ph = h - 80; // space after controls
+    const py = y + 72;
+    uiRegions.liveOffspring = [];
+    for (let i = 0; i < 4; i++) {
+      const px = pad + i * (pw + pad);
+      const pg = createGraphics(pw, ph);
+      pg.background(240);
+      pg.translate(pg.width / 2, pg.height / 2);
+      pg.scale(0.5);
+      drawWallpaperOn(pg, liveOffspring[i]);
+      image(pg, px, py);
+      // border
+      stroke(0); noFill(); rect(px, py, pw, ph, 6);
+      if (liveOffspringSelected[i]) {
+        stroke("#2ecc71"); strokeWeight(3); rect(px + 3, py + 3, pw - 6, ph - 6, 6); strokeWeight(1);
+      }
+      // checkbox
+      const cb = 18;
+      noStroke(); fill(liveOffspringSelected[i] ? "#2ecc71" : 255);
+      rect(px + pw - cb - 6, py + 6, cb, cb, 4);
+      stroke(0); noFill(); rect(px + pw - cb - 6, py + 6, cb, cb, 4);
+      uiRegions.liveOffspring[i] = { x: px, y: py, w: pw, h: ph };
+    }
+  }
+}
+
+function buildOffspringPreview() {
+  let children = [];
+  if (selectedParents.length === 0) {
+    for (let i = 0; i < 4; i++) children.push(randomGenome());
+  } else if (selectedParents.length === 1) {
+    for (let i = 0; i < 4; i++) children.push(mutateGenome(selectedParents[0], mutationRate));
+  } else {
+    for (let i = 0; i < 4; i++) {
+      children.push(
+        mixGenomes(selectedParents, {
+          method: combineMethod,
+          mutationRate: mutationRate * 0.5,
+          paletteOverride: paletteOverride,
+        })
+      );
+    }
+  }
+  return children;
+}
+
+function sendLiveOffspringToPool() {
+  let added = 0;
+  for (let i = 0; i < 4; i++) {
+    if (liveOffspringSelected[i]) {
+      pool.push(withMeta(liveOffspring[i]));
+      added++;
+    }
+  }
+  if (added > 0) {
+    for (const p of selectedParents) p.selectCount = (p.selectCount || 0) + 1;
+  }
+  enforceCapacity(GRID_COLS * GRID_ROWS, selectedParents);
+  gen++;
+  // Reroll a new set for the next generation and clear selections
+  liveOffspring = null;
+  liveOffspringSelected = [false, false, false, false];
 }
 
 function drawTitle() {
@@ -329,122 +445,7 @@ function drawTitle() {
   text("Pattern Evolution", width / 2, HEADER_H / 2);
 }
 
-function drawOffspringDialog() {
-  // Modal overlay
-  noStroke();
-  fill(0, 120);
-  rect(0, 0, width, height);
-
-  // Dialog box
-  const boxW = 760, boxH = 560;
-  const bx = (width - boxW) / 2;
-  const by = (height - boxH) / 2;
-  fill(255);
-  stroke(0);
-  rect(bx, by, boxW, boxH, 10);
-
-  // Title
-  noStroke(); fill(0); textAlign(CENTER, CENTER); textSize(20);
-  text("Select offspring to add to pool", bx + boxW / 2, by + 24);
-
-  // 2x2 grid of previews
-  const gw = 320, gh = 220, pad = 20;
-  const startX = bx + pad;
-  const startY = by + 50;
-  for (let i = 0; i < 4; i++) {
-    const r = floor(i / 2), c = i % 2;
-    const x = startX + c * (gw + pad);
-    const y = startY + r * (gh + pad);
-    // Render preview
-    const pg = createGraphics(gw, gh);
-    pg.background(240);
-    pg.translate(pg.width / 2, pg.height / 2);
-    pg.scale(0.6);
-    drawWallpaperOn(pg, offspringPreview[i]);
-    image(pg, x, y);
-    // Border and selection highlight
-    stroke(0); noFill(); rect(x, y, gw, gh, 6);
-    if (offspringSelected[i]) {
-      stroke("#2ecc71"); strokeWeight(4); noFill(); rect(x + 3, y + 3, gw - 6, gh - 6, 6); strokeWeight(1);
-    }
-    // Checkbox indicator
-    noStroke(); fill(offspringSelected[i] ? "#2ecc71" : 255);
-    rect(x + gw - 26, y + 6, 20, 20, 4);
-    stroke(0); noFill(); rect(x + gw - 26, y + 6, 20, 20, 4);
-  }
-
-  // Buttons
-  const btnW = 160, btnH = 40;
-  const addX = bx + boxW - btnW - 20, addY = by + boxH - btnH - 16;
-  const cancelX = addX - btnW - 12, cancelY = addY;
-  // Add to pool
-  stroke(0); fill("#06d6a0"); rect(addX, addY, btnW, btnH, 8);
-  noStroke(); fill(255); textAlign(CENTER, CENTER); textSize(18); text("Add to pool", addX + btnW / 2, addY + btnH / 2);
-  // Cancel
-  stroke(0); fill(255); rect(cancelX, cancelY, btnW, btnH, 8);
-  noStroke(); fill(0); textSize(18); text("Cancel", cancelX + btnW / 2, cancelY + btnH / 2);
-
-  // Cache clickable regions
-  uiRegions.offspring = [];
-  for (let i = 0; i < 4; i++) {
-    const r = floor(i / 2), c = i % 2;
-    const x = startX + c * (gw + pad);
-    const y = startY + r * (gh + pad);
-    uiRegions.offspring[i] = { x, y, w: gw, h: gh };
-  }
-  uiRegions.addBtn = { x: addX, y: addY, w: btnW, h: btnH };
-  uiRegions.cancelBtn = { x: cancelX, y: cancelY, w: btnW, h: btnH };
-}
-
-function handleOffspringDialogClick() {
-  // Toggle selection on thumbnails
-  if (uiRegions.offspring) {
-    for (let i = 0; i < 4; i++) {
-      const r = uiRegions.offspring[i];
-      if (r && pointInRect(mouseX, mouseY, r)) {
-        offspringSelected[i] = !offspringSelected[i];
-        drawScreen();
-        return true;
-      }
-    }
-  }
-  // Buttons
-  if (uiRegions.addBtn && pointInRect(mouseX, mouseY, uiRegions.addBtn)) {
-    commitOffspringToPool();
-    drawScreen();
-    return true;
-  }
-  if (uiRegions.cancelBtn && pointInRect(mouseX, mouseY, uiRegions.cancelBtn)) {
-    offspringPreview = null;
-    drawScreen();
-    return true;
-  }
-  return false;
-}
-
-function commitOffspringToPool() {
-  let added = 0;
-  for (let i = 0; i < 4; i++) {
-    if (offspringSelected[i]) {
-      pool.push(withMeta(offspringPreview[i]));
-      added++;
-    }
-  }
-
-  // Increment parent selection count once if any child accepted
-  if (added > 0) {
-    for (const p of selectedParents) p.selectCount = (p.selectCount || 0) + 1;
-  }
-
-  // Enforce capacity (6x8 = 48)
-  enforceCapacity(48, selectedParents);
-
-  // Clear selection and palette override; close dialog; increment generation
-  selectedParents = [];
-  paletteOverride = -1;
-  offspringPreview = null;
-  gen++;
-}
+// modal flow removed in favor of live Generate mode
 
 function enforceCapacity(capacity, preserveList = []) {
   if (pool.length <= capacity) return;
@@ -476,30 +477,42 @@ function enforceCapacity(capacity, preserveList = []) {
 
 // === interaction ===
 function mousePressed() {
-  // If offspring dialog is open, handle dialog interactions first
-  if (offspringPreview) {
-    if (handleOffspringDialogClick()) return;
-  }
-
   // Controls panel hit-testing
+  if (uiRegions.genModeToggle && pointInRect(mouseX, mouseY, uiRegions.genModeToggle)) {
+    generateMode = !generateMode;
+    // reset live previews when toggled on
+    liveOffspring = null;
+    liveOffspringSelected = [false, false, false, false];
+    return drawScreen();
+  }
   if (uiRegions.genBtn && pointInRect(mouseX, mouseY, uiRegions.genBtn)) {
-    generateOffspring();
+    if (generateMode) {
+      sendLiveOffspringToPool();
+    } else {
+      // Enter generate mode if not already
+      generateMode = true;
+      liveOffspring = null;
+    }
     return drawScreen();
   }
   if (uiRegions.rateMinus && pointInRect(mouseX, mouseY, uiRegions.rateMinus)) {
     mutationRate = constrain(mutationRate - 0.05, 0, 1);
+    if (generateMode) liveOffspring = null;
     return drawScreen();
   }
   if (uiRegions.ratePlus && pointInRect(mouseX, mouseY, uiRegions.ratePlus)) {
     mutationRate = constrain(mutationRate + 0.05, 0, 1);
+    if (generateMode) liveOffspring = null;
     return drawScreen();
   }
   if (uiRegions.methodRandom && pointInRect(mouseX, mouseY, uiRegions.methodRandom)) {
     combineMethod = "random-trait";
+    if (generateMode) liveOffspring = null;
     return drawScreen();
   }
   if (uiRegions.methodAverage && pointInRect(mouseX, mouseY, uiRegions.methodAverage)) {
     combineMethod = "average";
+    if (generateMode) liveOffspring = null;
     return drawScreen();
   }
   if (uiRegions.paletteCycle && pointInRect(mouseX, mouseY, uiRegions.paletteCycle)) {
@@ -510,21 +523,37 @@ function mousePressed() {
       else if (paletteOverride < selectedParents.length - 1) paletteOverride++;
       else paletteOverride = -1; // cycle back to Mix
     }
+    if (generateMode) liveOffspring = null;
     return drawScreen();
   }
 
-  // Grid selection
+  // Grid selection (only in generate mode)
   const cols = GRID_COLS;
   const rows = GRID_ROWS;
-  if (mouseY >= HEADER_H && mouseY < height - PANEL_H) {
+  if (mouseY >= HEADER_H && mouseY < height - panelHeight()) {
     const cellW = width / cols;
-    const cellH = (height - HEADER_H - PANEL_H) / rows;
+    const cellH = (height - HEADER_H - panelHeight()) / rows;
     const c = floor(mouseX / cellW);
     const r = floor((mouseY - HEADER_H) / cellH);
     const idx = r * cols + c;
     if (idx >= 0 && idx < pool.length) {
-      toggleParentSelection(pool[idx]);
+      if (generateMode) {
+        toggleParentSelection(pool[idx]);
+        // changing parents should rebuild previews
+        liveOffspring = null;
+      }
       return drawScreen();
+    }
+  }
+
+  // Live preview selection (generate mode)
+  if (generateMode && uiRegions.liveOffspring) {
+    for (let i = 0; i < 4; i++) {
+      const r = uiRegions.liveOffspring[i];
+      if (r && pointInRect(mouseX, mouseY, r)) {
+        liveOffspringSelected[i] = !liveOffspringSelected[i];
+        return drawScreen();
+      }
     }
   }
 }
@@ -540,28 +569,7 @@ function toggleParentSelection(g) {
 }
 
 // Generate 4 offspring based on current parent selection and settings
-function generateOffspring() {
-  let children = [];
-  if (selectedParents.length === 0) {
-    for (let i = 0; i < 4; i++) children.push(randomGenome());
-  } else if (selectedParents.length === 1) {
-    for (let i = 0; i < 4; i++) children.push(mutateGenome(selectedParents[0], mutationRate));
-  } else {
-    for (let i = 0; i < 4; i++) {
-      children.push(
-        mixGenomes(selectedParents, {
-          method: combineMethod,
-          mutationRate: mutationRate * 0.5,
-          paletteOverride: paletteOverride,
-        })
-      );
-    }
-  }
-
-  // Open modal with these children (none selected initially)
-  offspringPreview = children;
-  offspringSelected = [false, false, false, false];
-}
+// generateOffspring removed (live preview replaces it)
 
 // Preview flow removed in favor of immediate generation
 
@@ -606,7 +614,7 @@ function createMotif(pg, g, s, palette) {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  const seedBase = ((g.id || 0) ^ (g.createdAt || 0)) >>> 0;
+  const seedBase = ((g.id || genomeHash(g)) ^ (g.createdAt || 0)) >>> 0;
   const rng = mulberry32(seedBase);
 
   colorMode(HSB, 360, 100, 100);
@@ -634,6 +642,25 @@ function createMotif(pg, g, s, palette) {
     });
   }
   return motif;
+}
+
+function genomeHash(g) {
+  // Simple non-cryptographic hash of salient genome parts for deterministic preview seeding
+  const obj = {
+    group: g.group,
+    palette: g.palette,
+    motifScale: Math.round(g.motifScale * 100) / 100,
+    rotation: Math.round(((g.rotation || 0) % (Math.PI * 2)) * 1000) / 1000,
+    hueShift: Math.round(g.hueShift * 10) / 10,
+    shapes: (g.shapes || []).map(s => ({ t: s.type, cb: Math.round((s.curveBias || 0) * 100) / 100, f: Math.round((s.fatness || 0) * 100) / 100 }))
+  };
+  const str = JSON.stringify(obj);
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 function drawMotif(pg, motif) {
