@@ -7,6 +7,7 @@
  *   - motifScale, rotation, hueShift: numeric controls for motif tiling and colour.
  *   - shapes: ordered array of motif parts, each with type, curveBias, fatness.
  *   - shapeStyle: desired shape vocabulary ("curved" | "straight" | "mixed").
+ *   - overlapMode: spatial relationship among motif shapes ("overlap" | "touch" | "space" | "mixed").
  *   - numShapes mirrors shapes.length for quick reference during mutation/mixing.
  *
  * `withMeta` decorates raw genomes with UI bookkeeping (id, timestamps, selectCount).
@@ -19,6 +20,7 @@
  */
 const CURVED_SHAPES = ["petal", "leaf", "blade", "drop", "arc"];
 const STRAIGHT_SHAPES = ["bar", "triangle", "kite", "spoke", "chevron"];
+const OVERLAP_MODES = ["overlap", "touch", "space", "mixed"];
 
 function allowedTypesForStyle(style) {
   if (style === "curved") return CURVED_SHAPES;
@@ -73,6 +75,7 @@ function randomGenome() {
   const motifScale = random(48, 88);
   const hueShift = random(-12, 12);
   const shapeStyle = random(["curved", "straight", "mixed", "mixed"]);
+  const overlapMode = random(["overlap", "touch", "space", "mixed"]);
   let numShapes = floor(random(5, 9));
   let shapes = [];
   for (let i = 0; i < numShapes; i++) {
@@ -86,6 +89,7 @@ function randomGenome() {
     rotation: random(TWO_PI),
     hueShift,
     shapeStyle,
+    overlapMode,
     numShapes: shapes.length,
     shapes
   };
@@ -106,6 +110,11 @@ function mutateGenome(g, rate = 0.25) {
     const styles = ["curved", "straight", "mixed"];
     m.shapeStyle = random(styles.filter(s => s !== m.shapeStyle)) || m.shapeStyle;
   }
+  const priorOverlap = m.overlapMode || "mixed";
+  if (random() < 0.1 * rate) {
+    const modes = ["overlap", "touch", "space", "mixed"];
+    m.overlapMode = random(modes.filter(s => s !== m.overlapMode)) || m.overlapMode;
+  }
   const styleForShapes = m.shapeStyle || "mixed";
   for (let s of m.shapes) {
     if (random() < 0.45 * rate) s.fatness = constrain((s.fatness ?? 0.5) + random(-0.18, 0.18) * rate, 0.2, 1.6);
@@ -122,6 +131,9 @@ function mutateGenome(g, rate = 0.25) {
   }
   if (styleForShapes !== priorStyle || random() < 0.12 * rate) {
     harmonizeShapesWithStyle(m.shapes, styleForShapes);
+  }
+  if (m.overlapMode !== priorOverlap) {
+    // Placeholder for future spatial re-layout if needed.
   }
   m.numShapes = m.shapes.length;
   return m;
@@ -154,6 +166,7 @@ function mixGenomes(parents, options) {
   };
   const blendNumeric = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
   const fallbackStyle = (val) => (val === "curved" || val === "straight" || val === "mixed") ? val : "mixed";
+  const fallbackOverlap = (val) => OVERLAP_MODES.includes(val) ? val : "mixed";
 
   // Palette
   if (palIdx >= 0 && palIdx < p.length) c.palette = p[palIdx].palette;
@@ -173,6 +186,11 @@ function mixGenomes(parents, options) {
   if (method === "average") c.shapeStyle = styleMajority;
   else c.shapeStyle = fallbackStyle(random() < 0.55 ? styleMajority : pickParent().shapeStyle || styleMajority);
   const styleForShapes = c.shapeStyle || "mixed";
+  // Overlap mode
+  const overlapVotes = p.map(x => fallbackOverlap(x.overlapMode || "mixed"));
+  const overlapMajority = majority(overlapVotes);
+  if (method === "average") c.overlapMode = overlapMajority;
+  else c.overlapMode = fallbackOverlap(random() < 0.55 ? overlapMajority : pickParent().overlapMode || overlapMajority);
 
   // Numeric traits
   if (method === "average") {
@@ -242,6 +260,7 @@ function mixGenomes(parents, options) {
   // Light mutation to bring variation
   c = mutateGenome(c, mut);
   harmonizeShapesWithStyle(c.shapes, c.shapeStyle || "mixed");
+  // Future: spatial re-layout for overlapMode can be added here.
   return c;
 }
 
@@ -254,6 +273,7 @@ function genomeHash(g) {
     rotation: Math.round(((g.rotation || 0) % (Math.PI * 2)) * 1000) / 1000,
     hueShift: Math.round(g.hueShift * 10) / 10,
     shapeStyle: g.shapeStyle || "mixed",
+    overlapMode: g.overlapMode || "mixed",
     shapes: (g.shapes || []).map(s => ({ t: s.type, cb: Math.round((s.curveBias || 0) * 100) / 100, f: Math.round((s.fatness || 0) * 100) / 100 }))
   };
   const str = JSON.stringify(obj);

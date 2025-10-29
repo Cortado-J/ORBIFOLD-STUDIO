@@ -18,9 +18,9 @@ let thumbH = 100;
 
 // Grid and layout constants
 const GRID_COLS = 6;
-const GRID_ROWS = 3;
+const GRID_ROWS = 5;
 const HEADER_H = 48; // title bar height
-const PANEL_H = 80;  // control panel height
+const PANEL_H = 72;  // control panel height
 
 const ACTION_LABELS = {
   random: "Random",
@@ -35,7 +35,7 @@ let uiRegions = {
 };
 
 function setup() {
-  createCanvas(1000, 1000);
+  createCanvas(1000, 1100);
   angleMode(RADIANS);
   noLoop();
   // Also show version in browser tab
