@@ -103,9 +103,24 @@ function rgbToHSB(r, g, b) {
 
 function mutateColorHSB(colorHSB, rate = 0.2) {
   const base = normalizeColorHSB(colorHSB);
-  const hueDelta = random(-12, 12) * rate;
-  const satDelta = random(-10, 10) * rate;
-  const briDelta = random(-10, 10) * rate;
+  const scaledRate = constrain(rate, 0, 1.5);
+  const baseScale = 0.05 + scaledRate * 0.7;
+  const jumpScale = 0.18 + scaledRate;
+
+  const hueSmall = random(-14, 14) * baseScale;
+  const satSmall = random(-10, 10) * baseScale;
+  const briSmall = random(-10, 10) * baseScale;
+
+  const hueJumpChance = constrain(0.05 + scaledRate * 0.18, 0.05, 0.35);
+  const toneJumpChance = constrain(0.04 + scaledRate * 0.14, 0.04, 0.25);
+
+  const hueJump = random() < hueJumpChance ? random(-160, 160) * jumpScale : 0;
+  const satJump = random() < toneJumpChance ? random(-50, 50) * (jumpScale * 0.6) : 0;
+  const briJump = random() < toneJumpChance ? random(-50, 50) * (jumpScale * 0.6) : 0;
+
+  const hueDelta = hueSmall + hueJump;
+  const satDelta = satSmall + satJump;
+  const briDelta = briSmall + briJump;
   return normalizeColorHSB({
     h: base.h + hueDelta,
     s: base.s + satDelta,
