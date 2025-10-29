@@ -65,25 +65,28 @@ function handleAction(action) {
       break;
     }
     case "clone": {
+      const rate = mutationSlider.current();
       for (const parent of parents) {
-        const clone = withMeta(mutateGenome(parent, currentMutationRate()));
+        const clone = withMeta(mutateGenome(parent, rate));
         items.push({ genome: clone, parents: [parent] });
       }
       break;
     }
     case "average": {
+      const rate = mutationSlider.current();
       const child = withMeta(mixGenomes(parents, {
         method: "average",
-        mutationRate: currentMutationRate(),
+        mutationRate: rate,
         paletteOverride: -1,
       }));
       items.push({ genome: child, parents });
       break;
     }
     case "select": {
+      const rate = mutationSlider.current();
       const child = withMeta(mixGenomes(parents, {
         method: "random-trait",
-        mutationRate: currentMutationRate(),
+        mutationRate: rate,
         paletteOverride: -1,
       }));
       items.push({ genome: child, parents });

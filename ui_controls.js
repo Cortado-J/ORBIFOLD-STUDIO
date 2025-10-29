@@ -21,6 +21,9 @@ const mutationSlider = {
     mutationRate = this.clamp(value);
     if (redraw) drawScreen();
   },
+  current() {
+    return mutationRate;
+  },
   valueFromMouse(mx) {
     if (!this.region) return mutationRate;
     const t = constrain((mx - this.region.x) / this.region.w, 0, 1);
