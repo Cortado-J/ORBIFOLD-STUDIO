@@ -1,4 +1,5 @@
 // UI control state shared between UI rendering and sketch input handlers
+// Hosts interaction regions, mutation slider state, and shared mouse/key handlers.
 const MUTATION_MIN = 0.0;
 const MUTATION_MAX = 0.6;
 const MUTATION_STEP = 0.01;

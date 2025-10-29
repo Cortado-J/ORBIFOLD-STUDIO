@@ -1,4 +1,5 @@
 // === wallpaper rendering ===
+// Implements motif generation and wallpaper tiling logic for genomes.
 function drawWallpaperOn(pg, g) {
   let a = g.motifScale;
   let palette = palettes[g.palette];

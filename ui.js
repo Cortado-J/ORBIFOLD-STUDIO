@@ -1,4 +1,5 @@
 // UI state and rendering
+// Coordinates top-level layout, pool grid drawing, and control panel composition.
 function panelHeight() {
   return 220;
 }
