@@ -213,14 +213,46 @@ function mousePressed() {
   if (mutationSlider.decrease && pointInRect(mouseX, mouseY, mutationSlider.decrease)) return mutationSlider.set(mutationRate - MUTATION_STEP);
   if (mutationSlider.increase && pointInRect(mouseX, mouseY, mutationSlider.increase)) return mutationSlider.set(mutationRate + MUTATION_STEP);
 
+  const layout = calculatePoolLayout();
+  const metrics = getPoolScrollbarMetrics(layout);
+
+  if (layout.maxScroll > 0 && pointInRect(mouseX, mouseY, metrics.track)) {
+    if (pointInRect(mouseX, mouseY, metrics.knob)) {
+      poolScrollDragging = true;
+      poolScrollDragOffset = mouseY - metrics.knob.y;
+    } else if (metrics.knobTravel > 0) {
+      const relative = mouseY - metrics.track.y - metrics.knob.h / 2;
+      const ratio = constrain(relative / metrics.knobTravel, 0, 1);
+      poolScroll = ratio * layout.maxScroll;
+      poolScrollDragging = true;
+      poolScrollDragOffset = metrics.knob.h / 2;
+      drawScreen();
+    }
+    return;
+  }
+
   handlePoolClick(mouseX, mouseY);
 }
 
 function mouseReleased() {
   mutationSlider.endDrag();
+  poolScrollDragging = false;
+  poolScrollDragOffset = 0;
 }
 
 function mouseDragged() {
+  if (poolScrollDragging) {
+    const layout = calculatePoolLayout();
+    const metrics = getPoolScrollbarMetrics(layout);
+    if (layout.maxScroll > 0 && metrics.knobTravel > 0) {
+      const knobTop = mouseY - poolScrollDragOffset;
+      const ratio = constrain((knobTop - metrics.track.y) / metrics.knobTravel, 0, 1);
+      poolScroll = ratio * layout.maxScroll;
+      drawScreen();
+    }
+    return;
+  }
+
   mutationSlider.drag(mouseX);
 }
 
@@ -232,26 +264,40 @@ function keyTyped() {
   }
 }
 
+function mouseWheel(event) {
+  const layout = calculatePoolLayout();
+  const withinPoolY = mouseY >= layout.viewportTop && mouseY <= layout.viewportTop + layout.viewportHeight;
+  const withinPoolX = mouseX >= layout.originX && mouseX <= layout.originX + layout.cols * layout.cellSize;
+  if (!withinPoolX || !withinPoolY || layout.maxScroll <= 0) return;
+
+  const delta = event.delta;
+  if (delta === 0) return;
+
+  poolScroll = constrain(poolScroll + delta, 0, layout.maxScroll);
+  drawScreen();
+  return false;
+}
+
 function handlePoolClick(mx, my) {
-  const cols = GRID_COLS;
-  const rows = GRID_ROWS;
-  if (my < HEADER_H || my >= height - panelHeight()) return;
-  const gridH = height - HEADER_H - panelHeight();
-  const cellWBase = width / cols;
-  const cellHBase = gridH / rows;
-  const s = min(cellWBase, cellHBase);
-  const gap = max(4, s * 0.08);
-  const originX = (width - cols * s) / 2;
-  const originYBase = HEADER_H + gap / 2;
-  const maxOriginY = HEADER_H + gridH - rows * s;
-  const originY = min(originYBase, maxOriginY);
-  if (mx < originX || mx >= originX + cols * s || my < originY || my >= originY + rows * s) return;
-  const c = floor((mx - originX) / s);
-  const r = floor((my - originY) / s);
-  const localX = (mx - originX) - c * s;
-  const localY = (my - originY) - r * s;
-  if (localX < gap / 2 || localX > s - gap / 2 || localY < gap / 2 || localY > s - gap / 2) return;
-  const idx = r * cols + c;
+  const layout = calculatePoolLayout();
+  const viewportBottom = layout.viewportTop + layout.viewportHeight;
+  if (my < layout.viewportTop || my >= viewportBottom) return;
+
+  const gridWidth = layout.cols * layout.cellSize;
+  if (mx < layout.originX || mx >= layout.originX + gridWidth) return;
+
+  const localX = mx - layout.originX;
+  const localY = my - layout.viewportTop + poolScroll;
+  const c = floor(localX / layout.cellSize);
+  const r = floor(localY / layout.cellSize);
+  if (c < 0 || c >= layout.cols || r < 0 || r >= layout.totalRows) return;
+
+  const innerX = localX - c * layout.cellSize;
+  const innerY = localY - r * layout.cellSize;
+  const margin = (layout.cellSize - layout.tile) / 2;
+  if (innerX < margin || innerX > layout.cellSize - margin || innerY < margin || innerY > layout.cellSize - margin) return;
+
+  const idx = r * layout.cols + c;
   if (idx < 0 || idx >= pool.length) return;
   const genome = pool[idx];
   if (selectedParents.includes(genome)) selectedParents = selectedParents.filter(p => p !== genome);

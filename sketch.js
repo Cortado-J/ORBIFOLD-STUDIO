@@ -11,6 +11,11 @@ const APP_VERSION = "v1.0.4";
 let selectedParents = []; // array of genomes currently selected (max 4)
 let pendingPreview = null; // { action, label, items: [{ genome, parents }], index }
 
+// Pool viewport scrolling state
+let poolScroll = 0;
+let poolScrollDragging = false;
+let poolScrollDragOffset = 0;
+
 // Layout caches
 let wq, hq;
 let thumbH = 100;
@@ -163,7 +168,9 @@ function acceptPreview() {
     }
   }
 
-  enforceCapacity(GRID_COLS * GRID_ROWS, selectedParents);
+  if (typeof scrollPoolToLatest === "function") {
+    scrollPoolToLatest();
+  }
 
   pendingPreview.index++;
   if (!previewActive()) {

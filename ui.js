@@ -5,6 +5,77 @@ function panelHeight() {
   return 220;
 }
 
+function calculatePoolLayout() {
+  const cols = GRID_COLS;
+  const visibleRows = GRID_ROWS;
+  const gridH = height - HEADER_H - panelHeight();
+  const cellWBase = width / cols;
+  const cellHBase = gridH / visibleRows;
+  const cellSize = min(cellWBase, cellHBase);
+  const gap = max(4, cellSize * 0.08);
+  const tileBase = max(10, cellSize - gap);
+  const tile = max(10, tileBase * TILE_SCALE);
+  const originX = (width - cols * cellSize) / 2;
+  const originYBase = HEADER_H + gap / 2;
+  const maxOriginY = HEADER_H + gridH - visibleRows * cellSize;
+  const viewportTop = min(originYBase, maxOriginY);
+  const viewportHeight = visibleRows * cellSize;
+  const totalRows = max(1, ceil(pool.length / cols));
+  const contentHeight = totalRows * cellSize;
+  const maxScroll = max(0, contentHeight - viewportHeight);
+  const scrollbarWidth = 12;
+  const scrollbarX = originX + cols * cellSize + gap * 0.4;
+
+  return {
+    cols,
+    visibleRows,
+    gap,
+    tile,
+    cellSize,
+    originX,
+    viewportTop,
+    viewportHeight,
+    totalRows,
+    contentHeight,
+    maxScroll,
+    scrollbarWidth,
+    scrollbarX,
+  };
+}
+
+function getPoolScrollbarMetrics(layout) {
+  const track = {
+    x: layout.scrollbarX,
+    y: layout.viewportTop,
+    w: layout.scrollbarWidth,
+    h: layout.viewportHeight,
+  };
+
+  const knobHeight = layout.maxScroll <= 0
+    ? track.h
+    : max(24, track.h * (track.h / layout.contentHeight));
+  const knobTravel = max(0, track.h - knobHeight);
+  const knobY = knobTravel === 0
+    ? track.y
+    : track.y + knobTravel * (poolScroll / layout.maxScroll || 0);
+
+  return {
+    track,
+    knob: {
+      x: track.x,
+      y: knobY,
+      w: track.w,
+      h: knobHeight,
+    },
+    knobTravel,
+  };
+}
+
+function scrollPoolToLatest() {
+  const layout = calculatePoolLayout();
+  poolScroll = constrain(layout.maxScroll, 0, layout.maxScroll);
+}
+
 function drawScreen() {
   background(245);
   drawTitle();
@@ -13,29 +84,54 @@ function drawScreen() {
 }
 
 function drawPoolGrid() {
-  const cols = GRID_COLS;
-  const rows = GRID_ROWS;
-  const gridH = height - HEADER_H - panelHeight();
-  const cellWBase = width / cols;
-  const cellHBase = gridH / rows;
-  const s = min(cellWBase, cellHBase);
-  const gap = max(4, s * 0.08);
-  const tileBase = max(10, s - gap);
-  const tile = max(10, tileBase * TILE_SCALE);
-  const originX = (width - cols * s) / 2;
-  const originYBase = HEADER_H + gap / 2;
-  const maxOriginY = HEADER_H + gridH - rows * s;
-  const originY = min(originYBase, maxOriginY);
-  for (let i = 0; i < min(pool.length, cols * rows); i++) {
-    const r = floor(i / cols);
-    const c = i % cols;
-    const x = originX + c * s + (s - tile) / 2;
-    const y = originY + r * s + (s - tile) / 2;
-    const g = pool[i];
-    const isSel = selectedParents.includes(g);
-    drawQuadrant(g, x, y, tile, tile, isSel, i);
-    drawGenomeSummaryLabel(genomeSummary(g), x, y + tile + 4, tile);
+  const layout = calculatePoolLayout();
+  poolScroll = constrain(poolScroll, 0, layout.maxScroll);
+
+  const firstRow = floor(poolScroll / layout.cellSize);
+  const rowOffset = poolScroll - firstRow * layout.cellSize;
+  const remainingRows = max(0, layout.totalRows - firstRow);
+  const rowsToDraw = min(layout.visibleRows + 1, remainingRows);
+
+  for (let row = 0; row < rowsToDraw; row++) {
+    const globalRow = firstRow + row;
+    const yBase = layout.viewportTop + row * layout.cellSize - rowOffset;
+    const idxBase = globalRow * layout.cols;
+
+    for (let col = 0; col < layout.cols; col++) {
+      const idx = idxBase + col;
+      if (idx >= pool.length) break;
+      const x = layout.originX + col * layout.cellSize + (layout.cellSize - layout.tile) / 2;
+      const y = yBase + (layout.cellSize - layout.tile) / 2;
+      const g = pool[idx];
+      const isSel = selectedParents.includes(g);
+      drawQuadrant(g, x, y, layout.tile, layout.tile, isSel, idx);
+      drawGenomeSummaryLabel(genomeSummary(g), x, y + layout.tile + 4, layout.tile);
+    }
   }
+
+  drawPoolScrollbar(layout);
+}
+
+function drawPoolScrollbar(layout) {
+  const metrics = getPoolScrollbarMetrics(layout);
+  const track = metrics.track;
+  const knob = metrics.knob;
+
+  push();
+  stroke(0);
+  strokeWeight(2);
+  fill(230);
+  rect(track.x, track.y, track.w, track.h, track.w / 2);
+
+  if (layout.maxScroll <= 0) {
+    fill(120);
+    rect(track.x, track.y, track.w, track.h, track.w / 2);
+  } else {
+    fill(80);
+    rect(knob.x, knob.y, knob.w, knob.h, track.w / 2);
+  }
+
+  pop();
 }
 
 function drawQuadrant(g, x, y, w, h, isSelected = false, idx = 0) {

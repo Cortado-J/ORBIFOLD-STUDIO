@@ -6,10 +6,7 @@
  *   - `buildOffspringPreview` generates up to four candidate children based on the
  *     current selection state (random, cloned, or mixed using global controls).
  *   - `sendLiveOffspringToPool` moves user-approved previews into the pool and
- *     updates selection statistics before enforcing the grid capacity.
- *   - `enforceCapacity` trims the pool when it exceeds the visible grid, biasing
- *     removals toward low-engagement patterns while preserving explicitly
- *     protected parents.
+ *     updates selection statistics.
  */
 function buildOffspringPreview() {
   let children = [];
@@ -35,45 +32,31 @@ function sendLiveOffspringToPool() {
   let added = 0;
   for (let i = 0; i < 4; i++) {
     if (liveOffspringSelected[i] && liveOffspring && liveOffspring[i]) {
-      pool.push(withMeta(liveOffspring[i]));
+      pool.push(liveOffspring[i]);
       added++;
+
+      if (liveOffspring[i].parents && liveOffspring[i].parents.length > 0) {
+        const seen = new Set();
+        for (const parent of liveOffspring[i].parents) {
+          if (parent && !seen.has(parent)) {
+            parent.selectCount = (parent.selectCount || 0) + 1;
+            seen.add(parent);
+          }
+        }
+      }
     }
   }
+
   if (added > 0) {
-    for (const p of selectedParents) p.selectCount = (p.selectCount || 0) + 1;
-    enforceCapacity(GRID_COLS * GRID_ROWS, selectedParents);
     gen++;
     console.log(`Added ${added} patterns to the pool`);
-    liveOffspring = buildOffspringPreview();
-    liveOffspringSelected = [false, false, false, false];
-  } else {
-    liveOffspring = buildOffspringPreview();
-    liveOffspringSelected = [false, false, false, false];
+    if (typeof scrollPoolToLatest === "function") {
+      scrollPoolToLatest();
+    }
   }
-}
 
-function enforceCapacity(capacity, preserveList = []) {
-  if (pool.length <= capacity) return;
-  const toRemove = pool.length - capacity;
-  const preserve = new Set(preserveList);
-  const candidates = pool.filter(g => !preserve.has(g));
-  candidates.sort((a, b) => {
-    const ca = (a.selectCount || 0) - (b.selectCount || 0);
-    if (ca !== 0) return ca;
-    return (a.createdAt || 0) - (b.createdAt || 0);
-  });
-  let removed = 0;
-  for (let i = 0; i < candidates.length && removed < toRemove; i++) {
-    const g = candidates[i];
-    const idx = pool.indexOf(g);
-    if (idx >= 0) { pool.splice(idx, 1); removed++; }
-  }
-  if (removed < toRemove) {
-    pool.sort((a, b) => {
-      const ca = (a.selectCount || 0) - (b.selectCount || 0);
-      if (ca !== 0) return ca;
-      return (a.createdAt || 0) - (b.createdAt || 0);
-    });
-    pool.splice(0, toRemove - removed);
-  }
+  liveOffspring = buildOffspringPreview();
+  liveOffspringSelected = [false, false, false, false];
+
+  drawScreen();
 }
