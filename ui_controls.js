@@ -103,3 +103,7 @@ function handlePoolClick(mx, my) {
   else selectedParents.push(genome);
   drawScreen();
 }
+
+function pointInRect(px, py, r) {
+  return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+}
