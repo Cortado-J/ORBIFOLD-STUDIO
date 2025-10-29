@@ -16,6 +16,19 @@
  * a light mutation pass for variation.
  * Supporting helpers (`genomeHash`, etc.) keep previews deterministic.
  */
+const SHAPE_TYPES = ["petal", "leaf", "blade", "drop", "arc"];
+
+function randomShape(template = null) {
+  const type = template && random() < 0.6 ? template.type : random(SHAPE_TYPES);
+  const baseCurve = template?.curveBias ?? random(0.3, 0.7);
+  const baseFat = template?.fatness ?? random(0.4, 1.0);
+  return {
+    type,
+    curveBias: constrain(baseCurve + random(-0.15, 0.15), 0.05, 0.95),
+    fatness: constrain(baseFat + random(-0.2, 0.2), 0.2, 1.6)
+  };
+}
+
 let nextId = 1;
 
 function withMeta(g) {
@@ -29,22 +42,21 @@ function withMeta(g) {
 function randomGenome() {
   const groups = ["632", "442", "333", "2222"];
   const paletteKeys = Object.keys(palettes);
-  let numShapes = floor(random(3, 6));
+  const motifScale = random(48, 88);
+  const hueShift = random(-12, 12);
+  let numShapes = floor(random(5, 9));
   let shapes = [];
   for (let i = 0; i < numShapes; i++) {
-    shapes.push({
-      type: random(["petal", "leaf", "blade", "drop", "arc"]),
-      curveBias: random(0.2, 0.8),
-      fatness: random(0.3, 1.0)
-    });
+    const template = shapes.length > 0 && random() < 0.45 ? random(shapes) : null;
+    shapes.push(randomShape(template));
   }
   return {
     group: random(groups),
     palette: random(paletteKeys),
-    motifScale: random(60, 120),
+    motifScale,
     rotation: random(TWO_PI),
-    hueShift: random(-20, 20),
-    numShapes,
+    hueShift,
+    numShapes: shapes.length,
     shapes
   };
 }
@@ -53,17 +65,24 @@ function randomGenome() {
 function mutateGenome(g, rate = 0.25) {
   // rate in [0,1], scaling mutation intensity and probability
   let m = structuredClone(g);
-  m.hueShift += random(-10, 10) * rate;
+  m.hueShift += random(-6, 6) * rate;
   // scale multiplicative change towards 1 by rate
-  let scaleJitter = lerp(1, random(0.8, 1.3), rate);
-  m.motifScale = constrain(m.motifScale * scaleJitter, 20, 200);
-  if (random() < 0.3 * rate) m.palette = random(Object.keys(palettes));
-  if (random() < 0.3 * rate) m.group = random(["632", "442", "333", "2222"]);
+  let scaleJitter = lerp(1, random(0.9, 1.15), rate);
+  m.motifScale = constrain(m.motifScale * scaleJitter, 32, 140);
+  if (random() < 0.12 * rate) m.palette = random(Object.keys(palettes));
+  if (random() < 0.15 * rate) m.group = random(["632", "442", "333", "2222"]);
   for (let s of m.shapes) {
-    if (random() < 0.5) {
-      s.fatness = constrain(s.fatness + random(-0.1, 0.1) * rate, 0.1, 2);
-      s.curveBias = constrain((s.curveBias ?? 0.5) + random(-0.1, 0.1) * rate, 0, 1);
-    }
+    if (random() < 0.45 * rate) s.fatness = constrain((s.fatness ?? 0.5) + random(-0.18, 0.18) * rate, 0.2, 1.6);
+    if (random() < 0.45 * rate) s.curveBias = constrain((s.curveBias ?? 0.5) + random(-0.18, 0.18) * rate, 0.05, 0.95);
+    if (random() < 0.12 * rate) s.type = random(SHAPE_TYPES);
+  }
+  if (random() < 0.08 * rate && m.shapes.length < 8) {
+    const template = m.shapes.length ? random(m.shapes) : null;
+    const insertAt = floor(random(m.shapes.length + 1));
+    m.shapes.splice(insertAt, 0, randomShape(template));
+  }
+  if (random() < 0.06 * rate && m.shapes.length > 4) {
+    m.shapes.splice(floor(random(m.shapes.length)), 1);
   }
   m.numShapes = m.shapes.length;
   return m;
@@ -94,38 +113,51 @@ function mixGenomes(parents, options) {
     }
     return best;
   };
+  const blendNumeric = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
 
   // Palette
   if (palIdx >= 0 && palIdx < p.length) c.palette = p[palIdx].palette;
-  else c.palette = method === "average" ? majority(p.map(x => x.palette)) : pickParent().palette;
+  else {
+    const paletteVotes = p.map(x => x.palette);
+    const paletteChoice = majority(paletteVotes);
+    c.palette = method === "average" || random() < 0.65 ? paletteChoice : pickParent().palette;
+  }
 
   // Group
-  c.group = method === "average" ? majority(p.map(x => x.group)) : pickParent().group;
+  const groupVotes = p.map(x => x.group);
+  c.group = method === "average" || random() < 0.6 ? majority(groupVotes) : pickParent().group;
 
   // Numeric traits
   if (method === "average") {
-    c.hueShift = p.map(x => x.hueShift).reduce((a, b) => a + b, 0) / p.length;
-    let ms = p.map(x => x.motifScale).reduce((a, b) => a + b, 0) / p.length;
-    c.motifScale = constrain(ms, 20, 200);
-    // rotation average naive
-    c.rotation = (p.map(x => x.rotation).reduce((a, b) => a + b, 0) / p.length) % TWO_PI;
+    c.hueShift = blendNumeric(p.map(x => x.hueShift));
+    let ms = blendNumeric(p.map(x => x.motifScale));
+    c.motifScale = constrain(ms, 32, 140);
+    c.rotation = blendNumeric(p.map(x => x.rotation)) % TWO_PI;
   } else {
     const pr = pickParent();
-    c.hueShift = pr.hueShift;
-    c.motifScale = pr.motifScale;
+    c.hueShift = lerp(pr.hueShift, blendNumeric(p.map(x => x.hueShift)), 0.25);
+    c.motifScale = constrain(lerp(pr.motifScale, blendNumeric(p.map(x => x.motifScale)), 0.3), 32, 140);
     c.rotation = pr.rotation;
   }
 
   // Shapes
-  let targetN = method === "average"
-    ? round(p.map(x => x.shapes.length).reduce((a, b) => a + b, 0) / p.length)
-    : pickParent().shapes.length;
-  targetN = constrain(targetN, 1, 8);
+  let targetN;
+  if (method === "average") {
+    targetN = round(blendNumeric(p.map(x => x.shapes.length)));
+  } else {
+    const maxShapes = max(...p.map(x => x.shapes.length));
+    targetN = round(lerp(maxShapes, blendNumeric(p.map(x => x.shapes.length)), 0.4));
+  }
+  targetN = constrain(targetN, 4, 9);
   c.shapes = [];
   for (let i = 0; i < targetN; i++) {
-    // Try to assemble shapes using i-th shape from random parent (if it exists), else random shape from a parent
-    let src = pickParent();
-    let base = src.shapes[i] || random(src.shapes);
+    const available = p.map(pp => pp.shapes[i]).filter(Boolean);
+    let base;
+    if (available.length) base = structuredClone(available[random(available.length) | 0]);
+    else {
+      const src = pickParent();
+      base = structuredClone(src.shapes[i % src.shapes.length]);
+    }
     let shp = structuredClone(base);
     if (method === "average") {
       // average comparable shapes at index i where available
@@ -133,11 +165,21 @@ function mixGenomes(parents, options) {
       if (pool.length > 1) {
         // type: majority vote
         const t = majority(pool.map(s => s.type));
-        const fb = pool.map(s => s.fatness ?? 0.5).reduce((a, b) => a + b, 0) / pool.length;
-        const cb = pool.map(s => s.curveBias ?? 0.5).reduce((a, b) => a + b, 0) / pool.length;
+        const fb = blendNumeric(pool.map(s => s.fatness ?? 0.5));
+        const cb = blendNumeric(pool.map(s => s.curveBias ?? 0.5));
         shp.type = t;
         shp.fatness = fb;
         shp.curveBias = cb;
+      }
+    } else {
+      if (random() < 0.4) {
+        const donor = pickParent();
+        const donorShape = donor.shapes[i % donor.shapes.length];
+        if (donorShape) {
+          shp.type = donorShape.type;
+          shp.fatness = donorShape.fatness;
+          shp.curveBias = donorShape.curveBias;
+        }
       }
     }
     c.shapes.push(shp);
