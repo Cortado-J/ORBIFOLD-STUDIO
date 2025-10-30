@@ -139,6 +139,7 @@ function drawScreen() {
   drawTitle();
   drawPoolGrid();
   drawControls();
+  if (typeof drawHoverPreview === "function") drawHoverPreview();
 }
 
 function drawPoolGrid() {
@@ -359,6 +360,73 @@ function drawControls() {
   textAlign(RIGHT, TOP);
   textSize(14);
   text(`Gen ${gen}`, previewX + previewW - 16, previewY + 16);
+}
+
+function drawHoverPreview() {
+  if (!hoverPreview) return;
+  const { genome } = hoverPreview;
+  if (!genome) return;
+
+  const overlayMargin = 60;
+  const boxX = overlayMargin;
+  const boxY = overlayMargin;
+  const boxW = width - overlayMargin * 2;
+  const boxH = height - overlayMargin * 2;
+
+  push();
+  noStroke();
+  fill(0, 180);
+  rect(0, 0, width, height);
+  pop();
+
+  push();
+  stroke(255);
+  strokeWeight(4);
+  fill(20, 200);
+  rect(boxX, boxY, boxW, boxH, 12);
+  pop();
+
+  const padding = 24;
+  const artW = boxW - padding * 2;
+  const artH = boxH - padding * 2;
+  const artSize = min(artW, artH);
+  const artX = boxX + (boxW - artSize) / 2;
+  const artY = boxY + (boxH - artSize) / 2;
+
+  const pg = createGraphics(artSize, artSize);
+  pg.background(240);
+  pg.translate(pg.width / 2, pg.height / 2);
+  const layout = calculatePoolLayout();
+  const tileSize = max(1, layout.tile || 1);
+  const baseScale = displayScaleForPattern ? displayScaleForPattern(genome, tileSize, tileSize, 3) : 1;
+  const scaleFactor = baseScale * (artSize / tileSize);
+  if (abs(scaleFactor - 1) > 0.0001) pg.scale(scaleFactor);
+  drawWallpaperOn(pg, genome);
+  image(pg, artX, artY);
+
+  push();
+  stroke(255);
+  strokeWeight(4);
+  noFill();
+  rect(artX, artY, artSize, artSize, 8);
+  pop();
+
+  const label = genomeSummary ? genomeSummary(genome) : null;
+  if (label) {
+    push();
+    textAlign(CENTER, TOP);
+    textSize(24);
+    fill(255);
+    text(label, width / 2, artY + artSize + 24);
+    pop();
+  }
+
+  push();
+  textAlign(CENTER, TOP);
+  textSize(18);
+  fill(255);
+  text("Move the mouse away to close", width / 2, boxY + boxH - 36);
+  pop();
 }
 
 function drawTitle() {

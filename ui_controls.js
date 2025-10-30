@@ -262,6 +262,7 @@ function drawPatternSizeSection(layout, sliderMetrics) {
 }
 
 function mousePressed() {
+  if (typeof clearHoverPreview === "function") clearHoverPreview();
   if (uiRegions.actionButtons) {
     for (const [action, region] of Object.entries(uiRegions.actionButtons)) {
       if (!region || !pointInRect(mouseX, mouseY, region)) continue;
@@ -372,30 +373,49 @@ function mouseWheel(event) {
   return false;
 }
 
+function mouseMoved() {
+  if (poolScrollDragging) return;
+  if (typeof setHoverPreviewTarget !== "function") return;
+  const hit = resolvePoolTileAt(mouseX, mouseY);
+  if (hit) setHoverPreviewTarget({ genome: hit.genome, idx: hit.idx });
+  else setHoverPreviewTarget(null);
+}
+
+function mouseOut() {
+  if (typeof setHoverPreviewTarget !== "function") return;
+  setHoverPreviewTarget(null);
+}
+
 function handlePoolClick(mx, my) {
+  const hit = resolvePoolTileAt(mx, my);
+  if (!hit) return;
+  const genome = hit.genome;
+  if (selectedParents.includes(genome)) selectedParents = selectedParents.filter(p => p !== genome);
+  else selectedParents.push(genome);
+  drawScreen();
+}
+
+function resolvePoolTileAt(mx, my) {
   const layout = calculatePoolLayout();
   const viewportBottom = layout.viewportTop + layout.viewportHeight;
-  if (my < layout.viewportTop || my >= viewportBottom) return;
+  if (my < layout.viewportTop || my >= viewportBottom) return null;
 
-  if (mx < layout.originX || mx >= layout.originX + layout.viewportWidth) return;
+  if (mx < layout.originX || mx >= layout.originX + layout.viewportWidth) return null;
 
   const localX = mx - layout.originX;
   const localY = my - layout.viewportTop + poolScroll;
   const c = floor(localX / layout.cellSize);
   const r = floor(localY / layout.cellSize);
-  if (c < 0 || c >= layout.visibleCols || r < 0 || r >= layout.totalRows) return;
+  if (c < 0 || c >= layout.visibleCols || r < 0 || r >= layout.totalRows) return null;
 
   const innerX = localX - c * layout.cellSize;
   const innerY = localY - r * layout.cellSize;
   const margin = (layout.cellSize - layout.tile) / 2;
-  if (innerX < margin || innerX > layout.cellSize - margin || innerY < margin || innerY > layout.cellSize - margin) return;
+  if (innerX < margin || innerX > layout.cellSize - margin || innerY < margin || innerY > layout.cellSize - margin) return null;
 
   const idx = r * layout.visibleCols + c;
-  if (idx < 0 || idx >= pool.length) return;
-  const genome = pool[idx];
-  if (selectedParents.includes(genome)) selectedParents = selectedParents.filter(p => p !== genome);
-  else selectedParents.push(genome);
-  drawScreen();
+  if (idx < 0 || idx >= pool.length) return null;
+  return { idx, genome: pool[idx] };
 }
 
 function pointInRect(px, py, r) {

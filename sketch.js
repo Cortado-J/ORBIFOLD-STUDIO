@@ -11,6 +11,48 @@ const APP_VERSION = "v1.0.4";
 let selectedParents = []; // array of genomes currently selected (max 4)
 let pendingPreview = null; // { action, label, items: [{ genome, parents }], index }
 
+function setHoverPreviewTarget(target) {
+  if (hoverPreviewTimer) {
+    clearTimeout(hoverPreviewTimer);
+    hoverPreviewTimer = null;
+  }
+
+  const targetChanged = !hoverPreviewTarget || hoverPreviewTarget.idx !== (target && target.idx);
+  hoverPreviewTarget = target;
+
+  if (!target) {
+    if (hoverPreview) {
+      hoverPreview = null;
+      drawScreen();
+    }
+    return;
+  }
+
+  hoverPreviewTimer = setTimeout(() => {
+    if (hoverPreviewTarget && target && hoverPreviewTarget.idx === target.idx) {
+      hoverPreview = target;
+      drawScreen();
+    }
+  }, HOVER_PREVIEW_DELAY);
+
+  if (targetChanged && hoverPreview) {
+    hoverPreview = null;
+    drawScreen();
+  }
+}
+
+function clearHoverPreview() {
+  if (hoverPreviewTimer) {
+    clearTimeout(hoverPreviewTimer);
+    hoverPreviewTimer = null;
+  }
+  hoverPreviewTarget = null;
+  if (hoverPreview) {
+    hoverPreview = null;
+    drawScreen();
+  }
+}
+
 // Pool viewport scrolling state
 let poolScroll = 0;
 let poolScrollDragging = false;
@@ -20,11 +62,17 @@ let poolScrollDragOffset = 0;
 let wq, hq;
 let thumbH = 100;
 
+let hoverPreview = null; // { genome, idx }
+let hoverPreviewTimer = null;
+let hoverPreviewTarget = null;
+
 // Grid and layout constants
 const GRID_COLS = 6;
 const GRID_ROWS = 5;
 const HEADER_H = 48; // title bar height
 const PANEL_H = 72;  // control panel height
+
+const HOVER_PREVIEW_DELAY = 500; // ms
 
 const ACTION_LABELS = {
   random: "Random",
