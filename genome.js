@@ -220,7 +220,7 @@ function genomeSummary(g) {
   const shapeCount = g.numShapes ?? (Array.isArray(g.shapes) ? g.shapes.length : 0);
   const countCode = `N${shapeCount || 0}`;
 
-  return overlapCode + styleCode + groupCode + paletteCode + countCode;
+  return groupCode + overlapCode + styleCode + paletteCode + countCode;
 }
 
 let nextId = 1;
