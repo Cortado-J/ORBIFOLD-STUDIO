@@ -8,12 +8,28 @@ const GROUP_SPECS = {
       { x: Math.sqrt(3) / 2, y: 1.5 },
     ],
   },
+  "*632": {
+    order: 6,
+    basis: [
+      { x: Math.sqrt(3), y: 0 },
+      { x: Math.sqrt(3) / 2, y: 1.5 },
+    ],
+    mirrorAngles: [0, Math.PI / 6],
+  },
   "442": {
     order: 4,
     basis: [
       { x: 1, y: 0 },
       { x: 0, y: 1 },
     ],
+  },
+  "*442": {
+    order: 4,
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    mirrorAngles: [0, Math.PI / 4],
   },
   "333": {
     order: 3,
@@ -22,12 +38,28 @@ const GROUP_SPECS = {
       { x: 0.5, y: Math.sqrt(3) / 2 },
     ],
   },
+  "*333": {
+    order: 3,
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0.5, y: Math.sqrt(3) / 2 },
+    ],
+    mirrorAngles: [0, Math.PI / 3],
+  },
   "2222": {
     order: 2,
     basis: [
       { x: 1, y: 0 },
       { x: 0.5, y: 0.6 },
     ],
+  },
+  "*2222": {
+    order: 2,
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0.5, y: 0.6 },
+    ],
+    mirrorAngles: [0, Math.PI / 2],
   },
 };
 
@@ -46,25 +78,50 @@ function latticePointFrom(spec, a, i, j) {
 function drawWallpaperOn(pg, g) {
   const a = g.motifScale;
   const spec = getGroupSpec(g.group);
-  const wedgeAngle = TWO_PI / spec.order;
+  const wedge = TWO_PI / spec.order;
+  const hasMirrors = Array.isArray(spec.mirrorAngles) && spec.mirrorAngles.length > 0;
+  const alpha = hasMirrors ? spec.mirrorAngles[0] : 0; // one representative mirror axis in world coords
   const motif = createMotif(pg, g, a * 0.4, ensureGenomeColors(g), spec);
-  const baseRotation = g.rotation || 0;
+  const base = g.rotation || 0;
   const tileRange = 4;
+
+  // helper: reflect about world-angle `alpha` after rotating by `theta`
+  function reflectAbout(pg, alpha, theta) {
+    const delta = alpha - theta;    // conjugation: R(theta)^{-1} M(alpha) R(theta)
+    pg.rotate(delta);
+    pg.scale(1, -1);
+    pg.rotate(-delta);
+  }
+
   for (const shape of motif) {
     for (let i = -tileRange; i <= tileRange; i++) {
       for (let j = -tileRange; j <= tileRange; j++) {
         const p = latticePointFrom(spec, a, i, j);
         for (let r = 0; r < spec.order; r++) {
+          const theta = base + r * wedge;
+
+          // chiral copy
           pg.push();
           pg.translate(p.x, p.y);
-          pg.rotate(baseRotation + wedgeAngle * r);
+          pg.rotate(theta);
           drawMotifShape(pg, shape);
           pg.pop();
+
+          if (hasMirrors) {
+            // mirrored copy: R(theta) ∘ M(alpha)
+            pg.push();
+            pg.translate(p.x, p.y);
+            pg.rotate(theta);
+            reflectAbout(pg, alpha, theta);
+            drawMotifShape(pg, shape);
+            pg.pop();
+          }
         }
       }
     }
   }
 }
+
 
 // === motif & shapes ===
 function createMotif(pg, g, s, palette, spec) {
