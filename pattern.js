@@ -88,6 +88,16 @@ const GROUP_SPECS = {
     ],
     mirrorAngles: [0, Math.PI / 2],
   },
+  "22*": {
+    order: 2,
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    mirrorAngles: [Math.PI / 2],
+    glideAngles: [0],
+    glideOffsets: [{ u: 0.5, v: 0 }],
+  },
 };
 
 function getGroupSpec(key) {
@@ -151,7 +161,8 @@ function drawWallpaperOn(pg, g) {
                 pg.pop();
               }
             }
-          } else if (hasGlides) {
+          }
+          if (hasGlides) {
             const ga = spec.glideAngles[0];
             const glides = (Array.isArray(spec.glideOffsets) && spec.glideOffsets.length) ? spec.glideOffsets : [{ u: 0.5, v: 0.5 }];
             for (const ofst of glides) {
