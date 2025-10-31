@@ -74,6 +74,8 @@ const PANEL_H = 72;  // control panel height
 
 const HOVER_PREVIEW_DELAY = 500; // ms
 
+let showSymmetryGuides = false;
+
 const ACTION_LABELS = {
   random: "Random",
   clone: "Clone",
@@ -181,6 +183,11 @@ function handleAction(action) {
 }
 
 function keyPressed() {
+  if (key === "m" || key === "M") {
+    showSymmetryGuides = !showSymmetryGuides;
+    drawScreen();
+    return;
+  }
   if (previewActive()) {
     if (key === " ") {
       acceptPreview();

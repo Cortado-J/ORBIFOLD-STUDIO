@@ -71,6 +71,15 @@ const GROUP_SPECS = {
       { x: 0.5, y: 0.6 },
     ],
   },
+  "2*22": {
+    order: 2,
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    mirrorAngles: [Math.PI / 4, (3 * Math.PI) / 4],
+    mirrorOffsets: [{ u: 0, v: 0 }],
+  },
   "*2222": {
     order: 2,
     basis: [
@@ -159,6 +168,57 @@ function drawWallpaperOn(pg, g) {
         }
       }
     }
+  }
+
+  if (typeof showSymmetryGuides !== "undefined" && showSymmetryGuides) {
+    const b1 = spec.basis[0];
+    const b2 = spec.basis[1];
+    const L = 5000;
+    pg.push();
+    pg.noFill();
+    if (hasMirrors) {
+      pg.stroke(0, 180, 255, 160);
+      pg.strokeWeight(1);
+      for (const ang of mirrorAnglesArr) {
+        for (const ofst of mirrorOffsets) {
+          const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
+          const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
+          const dx = Math.cos(ang);
+          const dy = Math.sin(ang);
+          for (let i = -tileRange; i <= tileRange; i++) {
+            for (let j = -tileRange; j <= tileRange; j++) {
+              const p = latticePointFrom(spec, a, i, j);
+              const cx = p.x + ox;
+              const cy = p.y + oy;
+              pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
+            }
+          }
+        }
+      }
+    }
+    if (hasGlides) {
+      const glideAnglesArr = Array.isArray(spec.glideAngles) ? spec.glideAngles : [];
+      const glideOffsets = (Array.isArray(spec.glideOffsets) && spec.glideOffsets.length) ? spec.glideOffsets : [{ u: 0.5, v: 0.5 }];
+      pg.stroke(255, 0, 160, 160);
+      pg.strokeWeight(1);
+      for (const ang of glideAnglesArr) {
+        for (const ofst of glideOffsets) {
+          const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
+          const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
+          const dx = Math.cos(ang);
+          const dy = Math.sin(ang);
+          for (let i = -tileRange; i <= tileRange; i++) {
+            for (let j = -tileRange; j <= tileRange; j++) {
+              const p = latticePointFrom(spec, a, i, j);
+              const cx = p.x + ox;
+              const cy = p.y + oy;
+              pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
+            }
+          }
+        }
+      }
+    }
+    pg.pop();
   }
 }
 
