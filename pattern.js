@@ -61,7 +61,8 @@ const GROUP_SPECS = {
       { x: 1, y: 0 },
       { x: 0.5, y: Math.sqrt(3) / 2 },
     ],
-    mirrorAngles: [Math.PI / 6],
+    mirrorAngles: [0, Math.PI / 3, (2 * Math.PI) / 3],
+    mirrorOffsets: [{ u: 1 / 3, v: 1 / 3 }],
   },
   "2222": {
     order: 2,
@@ -98,6 +99,8 @@ function drawWallpaperOn(pg, g) {
   const wedge = TWO_PI / spec.order;
   const hasMirrors = Array.isArray(spec.mirrorAngles) && spec.mirrorAngles.length > 0;
   const alpha = hasMirrors ? spec.mirrorAngles[0] : 0; // one representative mirror axis in world coords
+  const mirrorAnglesArr = Array.isArray(spec.mirrorAngles) ? spec.mirrorAngles : [];
+  const mirrorOffsets = (Array.isArray(spec.mirrorOffsets) && spec.mirrorOffsets.length) ? spec.mirrorOffsets : [{ u: 0, v: 0 }];
   const hasGlides = Array.isArray(spec.glideAngles) && spec.glideAngles.length > 0;
   const motif = createMotif(pg, g, a * 0.4, ensureGenomeColors(g), spec);
   const base = g.rotation || 0;
@@ -126,13 +129,19 @@ function drawWallpaperOn(pg, g) {
           pg.pop();
 
           if (hasMirrors) {
-            // mirrored copy: R(theta) ∘ M(alpha)
-            pg.push();
-            pg.translate(p.x, p.y);
-            pg.rotate(theta);
-            reflectAbout(pg, alpha, theta);
-            drawMotifShape(pg, shape);
-            pg.pop();
+            // mirrored copies for all specified mirror angles and optional offsets
+            for (const ang of mirrorAnglesArr) {
+              for (const ofst of mirrorOffsets) {
+                const mx = (ofst.u * spec.basis[0].x + ofst.v * spec.basis[1].x) * a;
+                const my = (ofst.u * spec.basis[0].y + ofst.v * spec.basis[1].y) * a;
+                pg.push();
+                pg.translate(p.x + mx, p.y + my);
+                pg.rotate(theta);
+                reflectAbout(pg, ang, theta);
+                drawMotifShape(pg, shape);
+                pg.pop();
+              }
+            }
           } else if (hasGlides) {
             const ga = spec.glideAngles[0];
             const glides = (Array.isArray(spec.glideOffsets) && spec.glideOffsets.length) ? spec.glideOffsets : [{ u: 0.5, v: 0.5 }];
