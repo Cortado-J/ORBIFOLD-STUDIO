@@ -89,13 +89,14 @@ const GROUP_SPECS = {
     mirrorAngles: [0, Math.PI / 2],
   },
   "22*": {
-    order: 1,  // No automatic rotations - we'll handle them specially
+    order: 2,  // 2-fold rotation (0° and 180°)
     basis: [
       { x: 1, y: 0 },
       { x: 0, y: 1 },
     ],
     mirrorAngles: [Math.PI / 2],  // vertical mirrors
-    rotationCenters: [{ u: 0.5, v: 0.5 }],  // 2-fold centers at (a/2, b/2)
+    rotationOffsets: [{ u: 0, v: 0 }, { u: 0.5, v: 0.5 }],  // rotation centers at lattice points and (a/2, b/2)
+    mirrorOffsets: [{ u: 0, v: 0 }, { u: 0.5, v: 0.5 }],  // mirrors at same positions as rotations for pmg
     // pmg: vertical mirrors + offset rotation centers = horizontal glides emerge
   },
 };
@@ -120,6 +121,7 @@ function drawWallpaperOn(pg, g) {
   const alpha = hasMirrors ? spec.mirrorAngles[0] : 0; // one representative mirror axis in world coords
   const mirrorAnglesArr = Array.isArray(spec.mirrorAngles) ? spec.mirrorAngles : [];
   const mirrorOffsets = (Array.isArray(spec.mirrorOffsets) && spec.mirrorOffsets.length) ? spec.mirrorOffsets : [{ u: 0, v: 0 }];
+  const rotationOffsets = (Array.isArray(spec.rotationOffsets) && spec.rotationOffsets.length) ? spec.rotationOffsets : [{ u: 0, v: 0 }];
   const hasGlides = Array.isArray(spec.glideAngles) && spec.glideAngles.length > 0;
   const motif = createMotif(pg, g, a * 0.4, ensureGenomeColors(g), spec);
   const base = g.rotation || 0;
@@ -138,56 +140,23 @@ function drawWallpaperOn(pg, g) {
       for (let j = -tileRange; j <= tileRange; j++) {
         const p = latticePointFrom(spec, a, i, j);
         
-        // Special handling for 22* (pmg)
-        if (g.group === "22*" && spec.rotationCenters) {
-          // Original at lattice point
-          pg.push();
-          pg.translate(p.x, p.y);
-          pg.rotate(base);
-          drawMotifShape(pg, shape);
-          pg.pop();
+        // Standard handling for all groups including 22*
+        for (const rotOfst of rotationOffsets) {
+          const rx = (rotOfst.u * spec.basis[0].x + rotOfst.v * spec.basis[1].x) * a;
+          const ry = (rotOfst.u * spec.basis[0].y + rotOfst.v * spec.basis[1].y) * a;
           
-          // Vertical mirror of original
-          pg.push();
-          pg.translate(p.x, p.y);
-          pg.rotate(base);
-          reflectAbout(pg, Math.PI/2, base);
-          drawMotifShape(pg, shape);
-          pg.pop();
-          
-          // 180° rotated copy at offset position
-          for (const center of spec.rotationCenters) {
-            const cx = (center.u * spec.basis[0].x + center.v * spec.basis[1].x) * a;
-            const cy = (center.u * spec.basis[0].y + center.v * spec.basis[1].y) * a;
-            
-            pg.push();
-            pg.translate(p.x + cx, p.y + cy);
-            pg.rotate(base + Math.PI);
-            drawMotifShape(pg, shape);
-            pg.pop();
-            
-            // Vertical mirror of rotated copy
-            pg.push();
-            pg.translate(p.x + cx, p.y + cy);
-            pg.rotate(base + Math.PI);
-            reflectAbout(pg, Math.PI/2, base + Math.PI);
-            drawMotifShape(pg, shape);
-            pg.pop();
-          }
-        } else {
-          // Standard handling for other groups
           for (let r = 0; r < spec.order; r++) {
             const theta = base + r * wedge;
 
-            // chiral copy
+            // chiral copy at rotation offset
             pg.push();
-            pg.translate(p.x, p.y);
+            pg.translate(p.x + rx, p.y + ry);
             pg.rotate(theta);
             drawMotifShape(pg, shape);
             pg.pop();
 
             if (hasMirrors) {
-              // mirrored copies for all specified mirror angles and optional offsets
+              // mirrored copies for all specified mirror angles
               for (const ang of mirrorAnglesArr) {
                 for (const ofst of mirrorOffsets) {
                   const mx = (ofst.u * spec.basis[0].x + ofst.v * spec.basis[1].x) * a;
@@ -204,8 +173,8 @@ function drawWallpaperOn(pg, g) {
           }
         }
         
-        // Handle explicit glides for other groups (not 22*)
-        if (hasGlides && g.group !== "22*") {
+        // Handle explicit glides
+        if (hasGlides) {
           for (let r = 0; r < spec.order; r++) {
             const theta = base + r * wedge;
             const ga = spec.glideAngles[0];
