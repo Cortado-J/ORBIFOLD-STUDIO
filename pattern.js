@@ -131,6 +131,11 @@ const GROUP_SPECS = {
   },
 };
 
+// Export list of available wallpaper groups
+function getAvailableGroups() {
+  return Object.keys(GROUP_SPECS);
+}
+
 function getGroupSpec(key) {
   if (GROUP_SPECS[key]) return GROUP_SPECS[key];
   return GROUP_SPECS["442"]; // fallback to square lattice
