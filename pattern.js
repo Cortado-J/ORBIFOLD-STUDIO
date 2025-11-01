@@ -119,6 +119,16 @@ const GROUP_SPECS = {
     // No mirrors, no glides, no special operations
     // Just the motif repeated at each lattice point
   },
+  "**": {
+    // pm - parallel mirror lines
+    order: 1,  // No rotations
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    mirrorAngles: [Math.PI / 2],  // Vertical mirror lines (perpendicular to x-axis)
+    // Mirror lines run vertically through each lattice point
+  },
 };
 
 function getGroupSpec(key) {
