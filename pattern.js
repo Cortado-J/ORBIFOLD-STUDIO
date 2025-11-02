@@ -170,6 +170,157 @@ function latticePointFrom(spec, a, i, j) {
   const y = (i * b1.y + j * b2.y) * a;
   return createVector(x, y);
 }
+
+function drawSymmetryGuides(pg, spec, g, {
+  a,
+  tileRange,
+  hasMirrors,
+  mirrorAnglesArr,
+  mirrorOffsets,
+  hasGlides,
+}) {
+  if (typeof showSymmetryGuides === "undefined" || !showSymmetryGuides) return;
+
+  const b1 = spec.basis[0];
+  const b2 = spec.basis[1];
+  const L = 5000;
+
+  pg.push();
+  pg.noFill();
+
+  if (hasMirrors) {
+    pg.stroke(0, 180, 255, 160);
+    pg.strokeWeight(1);
+    for (const ang of mirrorAnglesArr) {
+      for (const ofst of mirrorOffsets) {
+        const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
+        const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
+        const dx = Math.cos(ang);
+        const dy = Math.sin(ang);
+        for (let i = -tileRange; i <= tileRange; i++) {
+          for (let j = -tileRange; j <= tileRange; j++) {
+            const p = latticePointFrom(spec, a, i, j);
+            const cx = p.x + ox;
+            const cy = p.y + oy;
+            pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
+          }
+        }
+      }
+    }
+  }
+
+  if (hasGlides) {
+    const glideAnglesArr = Array.isArray(spec.glideAngles) ? spec.glideAngles : [];
+    const glideOffsets = (Array.isArray(spec.glideOffsets) && spec.glideOffsets.length)
+      ? spec.glideOffsets
+      : [{ u: 0.5, v: 0.5 }];
+    pg.stroke(255, 0, 160, 160);
+    pg.strokeWeight(1);
+    for (const ang of glideAnglesArr) {
+      for (const ofst of glideOffsets) {
+        const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
+        const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
+        const dx = Math.cos(ang);
+        const dy = Math.sin(ang);
+        for (let i = -tileRange; i <= tileRange; i++) {
+          for (let j = -tileRange; j <= tileRange; j++) {
+            const p = latticePointFrom(spec, a, i, j);
+            const cx = p.x + ox;
+            const cy = p.y + oy;
+            pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
+          }
+        }
+      }
+    }
+  }
+
+  if (g.group === "22*" && spec.rotationOffsets) {
+    pg.noStroke();
+    pg.fill(255, 200, 0, 120);
+    for (const center of spec.rotationOffsets) {
+      for (let i = -tileRange; i <= tileRange; i++) {
+        for (let j = -tileRange; j <= tileRange; j++) {
+          const p = latticePointFrom(spec, a, i, j);
+          const cx = (center.u * b1.x + center.v * b2.x) * a;
+          const cy = (center.u * b1.y + center.v * b2.y) * a;
+          pg.ellipse(p.x + cx, p.y + cy, 8, 8);
+        }
+      }
+    }
+  }
+
+  if (g.group === "*x") {
+    pg.strokeWeight(2);
+    pg.noFill();
+
+    pg.stroke(0, 180, 255, 160);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.line(p.x, p.y - L, p.x, p.y + L);
+      }
+    }
+
+    pg.stroke(255, 0, 160, 160);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.line(p.x - L, p.y + a / 2, p.x + L, p.y + a / 2);
+      }
+    }
+  }
+
+  if (g.group === "xx") {
+    pg.strokeWeight(2);
+    pg.noFill();
+
+    pg.stroke(255, 0, 160, 160);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.line(p.x - L, p.y, p.x + L, p.y);
+        pg.line(p.x - L, p.y + a / 2, p.x + L, p.y + a / 2);
+      }
+    }
+  }
+
+  if (g.group === "22x") {
+    pg.strokeWeight(2);
+    pg.noFill();
+
+    pg.stroke(255, 0, 160, 160);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.line(p.x - L, p.y, p.x + L, p.y);
+        pg.line(p.x - L, p.y + a / 2, p.x + L, p.y + a / 2);
+      }
+    }
+
+    pg.stroke(0, 255, 160, 160);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.line(p.x, p.y - L, p.x, p.y + L);
+        pg.line(p.x + a / 2, p.y - L, p.x + a / 2, p.y + L);
+      }
+    }
+
+    pg.noStroke();
+    pg.fill(255, 200, 0, 80);
+    for (let i = -tileRange; i <= tileRange; i++) {
+      for (let j = -tileRange; j <= tileRange; j++) {
+        const p = latticePointFrom(spec, a, i, j);
+        pg.ellipse(p.x, p.y, 6, 6);
+        pg.ellipse(p.x + a / 2, p.y, 6, 6);
+        pg.ellipse(p.x, p.y + a / 2, 6, 6);
+        pg.ellipse(p.x + a / 2, p.y + a / 2, 6, 6);
+      }
+    }
+  }
+
+  pg.pop();
+}
 function drawWallpaperOn(pg, g) {
   const a = g.motifScale;
   const spec = getGroupSpec(g.group);
@@ -410,159 +561,14 @@ function drawWallpaperOn(pg, g) {
     }
   }
 
-  if (typeof showSymmetryGuides !== "undefined" && showSymmetryGuides) {
-    const b1 = spec.basis[0];
-    const b2 = spec.basis[1];
-    const L = 5000;
-    pg.push();
-    pg.noFill();
-    if (hasMirrors) {
-      pg.stroke(0, 180, 255, 160);
-      pg.strokeWeight(1);
-      for (const ang of mirrorAnglesArr) {
-        for (const ofst of mirrorOffsets) {
-          const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
-          const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
-          const dx = Math.cos(ang);
-          const dy = Math.sin(ang);
-          for (let i = -tileRange; i <= tileRange; i++) {
-            for (let j = -tileRange; j <= tileRange; j++) {
-              const p = latticePointFrom(spec, a, i, j);
-              const cx = p.x + ox;
-              const cy = p.y + oy;
-              pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
-            }
-          }
-        }
-      }
-    }
-    if (hasGlides) {
-      const glideAnglesArr = Array.isArray(spec.glideAngles) ? spec.glideAngles : [];
-      const glideOffsets = (Array.isArray(spec.glideOffsets) && spec.glideOffsets.length) ? spec.glideOffsets : [{ u: 0.5, v: 0.5 }];
-      pg.stroke(255, 0, 160, 160);
-      pg.strokeWeight(1);
-      for (const ang of glideAnglesArr) {
-        for (const ofst of glideOffsets) {
-          const ox = (ofst.u * b1.x + ofst.v * b2.x) * a;
-          const oy = (ofst.u * b1.y + ofst.v * b2.y) * a;
-          const dx = Math.cos(ang);
-          const dy = Math.sin(ang);
-          for (let i = -tileRange; i <= tileRange; i++) {
-            for (let j = -tileRange; j <= tileRange; j++) {
-              const p = latticePointFrom(spec, a, i, j);
-              const cx = p.x + ox;
-              const cy = p.y + oy;
-              pg.line(cx - dx * L, cy - dy * L, cx + dx * L, cy + dy * L);
-            }
-          }
-        }
-      }
-    }
-    // Show rotation centers for 22*
-    if (g.group === "22*" && spec.rotationOffsets) {
-      pg.noStroke();
-      pg.fill(255, 200, 0, 120); // Orange for 22*
-      for (const center of spec.rotationOffsets) {
-        for (let i = -tileRange; i <= tileRange; i++) {
-          for (let j = -tileRange; j <= tileRange; j++) {
-            const p = latticePointFrom(spec, a, i, j);
-            const cx = (center.u * b1.x + center.v * b2.x) * a;
-            const cy = (center.u * b1.y + center.v * b2.y) * a;
-            pg.ellipse(p.x + cx, p.y + cy, 8, 8);
-          }
-        }
-      }
-    }
-    
-    // Show symmetry guides for *x (cm)
-    if (g.group === "*x") {
-      pg.strokeWeight(2);
-      pg.noFill();
-      
-      // Vertical mirror axes at x = 0 (through lattice points)
-      pg.stroke(0, 180, 255, 160); // Blue for mirrors
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Vertical mirror through lattice point
-          pg.line(p.x, p.y - L, p.x, p.y + L);
-        }
-      }
-      
-      // Horizontal glide axes at y = b/2 (perpendicular to mirrors!)
-      pg.stroke(255, 0, 160, 160); // Magenta for glides
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Horizontal glide at y = b/2 (between lattice rows)
-          pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
-        }
-      }
-    }
-    
-    // Show glide axes for xx (pg) - parallel horizontal glides only
-    if (g.group === "xx") {
-      pg.strokeWeight(2);
-      pg.noFill();
-      
-      // Horizontal glide axes at y = 0 (through lattice points) and y = b/2 (between rows)
-      pg.stroke(255, 0, 160, 160); // Magenta for glides
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Glide axis through each lattice point (horizontal)
-          pg.line(p.x - L, p.y, p.x + L, p.y);
-          // Glide axis between lattice rows at y = b/2
-          pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
-        }
-      }
-    }
-    
-    // Show glide axes for 22x (pgg)
-    if (g.group === "22x") {
-      pg.strokeWeight(2);
-      pg.noFill();
-      
-      // Horizontal glide axes at y = 0 and y = 0.5
-      pg.stroke(255, 0, 160, 160); // Magenta for horizontal glides
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Glide at y = 0 (through lattice points)
-          pg.line(p.x - L, p.y, p.x + L, p.y);
-          // Glide at y = 0.5
-          pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
-        }
-      }
-      
-      // Vertical glide axes at x = 0 and x = 0.5
-      pg.stroke(0, 255, 160, 160); // Cyan for vertical glides
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Glide at x = 0 (through lattice points)
-          pg.line(p.x, p.y - L, p.x, p.y + L);
-          // Glide at x = 0.5
-          pg.line(p.x + a/2, p.y - L, p.x + a/2, p.y + L);
-        }
-      }
-      
-      // Show the four 2-fold rotation centers that result from the glides
-      pg.noStroke();
-      pg.fill(255, 200, 0, 80); // Semi-transparent orange
-      for (let i = -tileRange; i <= tileRange; i++) {
-        for (let j = -tileRange; j <= tileRange; j++) {
-          const p = latticePointFrom(spec, a, i, j);
-          // Centers at (0,0), (a/2,0), (0,a/2), (a/2,a/2)
-          pg.ellipse(p.x, p.y, 6, 6);
-          pg.ellipse(p.x + a/2, p.y, 6, 6);
-          pg.ellipse(p.x, p.y + a/2, 6, 6);
-          pg.ellipse(p.x + a/2, p.y + a/2, 6, 6);
-        }
-      }
-    }
-    pg.pop();
-  }
+  drawSymmetryGuides(pg, spec, g, {
+    a,
+    tileRange,
+    hasMirrors,
+    mirrorAnglesArr,
+    mirrorOffsets,
+    hasGlides,
+  });
   
   // Report debug info for 22x
   if (g.group === "22x") {
