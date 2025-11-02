@@ -140,6 +140,17 @@ const GROUP_SPECS = {
     // Mark this as requiring special handling
     requiresSpecialHandling: true,
   },
+  "xx": {
+    // pg - parallel glide reflections only
+    order: 1,  // No rotations
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    // pg has only glide reflections, all parallel (horizontal)
+    // Mark this as requiring special handling
+    requiresSpecialHandling: true,
+  },
 };
 
 // Export list of available wallpaper groups
@@ -236,6 +247,52 @@ function drawWallpaperOn(pg, g) {
           pg.pop();
           
           continue;  // Skip standard handling for *x
+        }
+        
+        // Special handling for xx (pg) - parallel glide reflections only
+        if (g.group === "xx") {
+          // pg pattern: parallel horizontal glide reflections
+          // Creates a brick-wall pattern with alternating rows shifted and reflected
+          
+          // For even rows (j is even): original at lattice point, glide at +a/2
+          // For odd rows (j is odd): glide at lattice point, original at +a/2
+          // This creates the proper staggered pg pattern
+          
+          if (j % 2 === 0) {
+            // Even row: normal arrangement
+            // 1. Original motif at lattice point
+            pg.push();
+            pg.translate(p.x, p.y);
+            pg.rotate(base);
+            drawMotifShape(pg, shape);
+            pg.pop();
+            
+            // 2. Glide reflection: shift by a/2 horizontally, reflect vertically
+            pg.push();
+            pg.translate(p.x + a/2, p.y);
+            pg.rotate(base);
+            pg.scale(1, -1);  // Reflect vertically
+            drawMotifShape(pg, shape);
+            pg.pop();
+          } else {
+            // Odd row: shifted arrangement to create brick pattern
+            // 1. Glide reflected motif at lattice point
+            pg.push();
+            pg.translate(p.x, p.y);
+            pg.rotate(base);
+            pg.scale(1, -1);  // Reflect vertically
+            drawMotifShape(pg, shape);
+            pg.pop();
+            
+            // 2. Original motif shifted by a/2
+            pg.push();
+            pg.translate(p.x + a/2, p.y);
+            pg.rotate(base);
+            drawMotifShape(pg, shape);
+            pg.pop();
+          }
+          
+          continue;  // Skip standard handling for xx
         }
         
         // Special handling for 22x (pgg) - explicit glide reflections
@@ -438,6 +495,24 @@ function drawWallpaperOn(pg, g) {
         for (let j = -tileRange; j <= tileRange; j++) {
           const p = latticePointFrom(spec, a, i, j);
           // Horizontal glide at y = b/2 (between lattice rows)
+          pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
+        }
+      }
+    }
+    
+    // Show glide axes for xx (pg) - parallel horizontal glides only
+    if (g.group === "xx") {
+      pg.strokeWeight(2);
+      pg.noFill();
+      
+      // Horizontal glide axes at y = 0 (through lattice points) and y = b/2 (between rows)
+      pg.stroke(255, 0, 160, 160); // Magenta for glides
+      for (let i = -tileRange; i <= tileRange; i++) {
+        for (let j = -tileRange; j <= tileRange; j++) {
+          const p = latticePointFrom(spec, a, i, j);
+          // Glide axis through each lattice point (horizontal)
+          pg.line(p.x - L, p.y, p.x + L, p.y);
+          // Glide axis between lattice rows at y = b/2
           pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
         }
       }

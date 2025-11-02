@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test pg (xx) Wallpaper Pattern</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        #info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .controls label {
+            display: inline-block;
+            width: 150px;
+        }
+        .controls input {
+            width: 200px;
+        }
+        #canvasContainer {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: inline-block;
+        }
+        .description {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            line-height: 1.6;
+        }
+        .pattern-info {
+            background: #fff9e6;
+            padding: 10px;
+            border-left: 3px solid #ffcc00;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>Test: pg (xx) Wallpaper Pattern</h1>
+        <div class="pattern-info">
+            <strong>pg (Plane Group 6)</strong><br>
+            • Parallel glide reflections only<br>
+            • No rotations or regular mirrors<br>
+            • Glide axes run horizontally through lattice points<br>
+            • Each glide translates by a/2 then reflects vertically
+        </div>
+        <div class="controls">
+            <label for="scaleSlider">Pattern Scale:</label>
+            <input type="range" id="scaleSlider" min="30" max="150" value="80">
+            <span id="scaleValue">80</span>
+        </div>
+        <div class="controls">
+            <label for="guidesToggle">Show Symmetry Guides:</label>
+            <input type="checkbox" id="guidesToggle" checked>
+        </div>
+        <div class="description">
+            The <strong>pg</strong> group contains only parallel glide reflections. 
+            The glide axes (shown in magenta when guides are enabled) run horizontally through each lattice point.
+            Each glide operation translates the motif by half a unit cell horizontally (a/2) 
+            and then reflects it across the horizontal axis. This creates a brick-like staggered pattern
+            where each row is shifted by half a unit relative to the row above or below.
+        </div>
+    </div>
+    <div id="canvasContainer"></div>
+
+    <script src="genome.js"></script>
+    <script src="pattern.js"></script>
+    <script>
+        let showSymmetryGuides = true;
+        let pg_graphics;
+        let scaleSlider, guidesToggle;
+        let testGenome;
+
+        function setup() {
+            let canvas = createCanvas(800, 600);
+            canvas.parent('canvasContainer');
+            pg_graphics = createGraphics(800, 600);
+            
+            scaleSlider = select('#scaleSlider');
+            guidesToggle = select('#guidesToggle');
+            
+            scaleSlider.input(() => {
+                select('#scaleValue').html(scaleSlider.value());
+                redraw();
+            });
+            
+            guidesToggle.changed(() => {
+                showSymmetryGuides = guidesToggle.checked();
+                redraw();
+            });
+            
+            // Create a test genome for pg pattern
+            testGenome = {
+                group: "xx",  // pg group
+                motifScale: parseFloat(scaleSlider.value()),
+                rotation: 0,
+                numShapes: 3,
+                shapes: [
+                    {
+                        type: "petal",
+                        curveBias: 0.4,
+                        fatness: 0.5,
+                        radiusJitter: 0,
+                        angleJitter: 0,
+                        sizeJitter: 0
+                    },
+                    {
+                        type: "leaf",
+                        curveBias: 0.3,
+                        fatness: 0.4,
+                        radiusJitter: 0.1,
+                        angleJitter: 0.1,
+                        sizeJitter: 0
+                    },
+                    {
+                        type: "drop",
+                        curveBias: 0.5,
+                        fatness: 0.3,
+                        radiusJitter: -0.05,
+                        angleJitter: 0.2,
+                        sizeJitter: 0.1
+                    }
+                ],
+                palette: "ocean",
+                hueShift: 10,
+                overlapMode: "overlap"
+            };
+            
+            // Load palettes if available
+            if (typeof palettes === 'undefined') {
+                window.palettes = {
+                    ocean: ["#006994", "#0099cc", "#66ccff", "#b3e6ff", "#004d6b"],
+                    forest: ["#2d5016", "#3a6b35", "#73a942", "#aad576", "#1e3810"],
+                    sunset: ["#ff6b35", "#ff9558", "#ffc87c", "#ffebb8", "#cc4125"]
+                };
+            }
+            
+            noLoop();
+            redraw();
+        }
+
+        function draw() {
+            // Update genome scale from slider
+            testGenome.motifScale = parseFloat(scaleSlider.value());
+            
+            // Clear graphics buffer
+            pg_graphics.clear();
+            pg_graphics.background(255);
+            
+            // Center the pattern
+            pg_graphics.push();
+            pg_graphics.translate(width/2, height/2);
+            
+            // Draw the wallpaper pattern
+            drawWallpaperOn(pg_graphics, testGenome);
+            
+            pg_graphics.pop();
+            
+            // Display the graphics buffer
+            clear();
+            background(240);
+            image(pg_graphics, 0, 0);
+        }
+        
+        // Handle window resize
+        function windowResized() {
+            resizeCanvas(800, 600);
+            pg_graphics = createGraphics(800, 600);
+            redraw();
+        }
+        
+        // Helper function for genome colors
+        function ensureGenomeColors(g) {
+            return ["#006994", "#0099cc", "#66ccff"];
+        }
+        
+        // Add mouse interaction to help visualize the pattern
+        function mouseMoved() {
+            if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+                redraw();
+                // Draw a highlight at mouse position
+                push();
+                stroke(255, 0, 0, 100);
+                strokeWeight(2);
+                noFill();
+                ellipse(mouseX, mouseY, 30, 30);
+                pop();
+            }
+        }
+    </script>
+</body>
+</html>
