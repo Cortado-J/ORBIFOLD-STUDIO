@@ -129,6 +129,17 @@ const GROUP_SPECS = {
     mirrorAngles: [Math.PI / 2],  // Vertical mirror lines (perpendicular to x-axis)
     // Mirror lines run vertically through each lattice point
   },
+  "*x": {
+    // cm - vertical mirrors with horizontal glide reflections
+    order: 1,  // No rotations
+    basis: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    // cm requires explicit combination of vertical mirrors and horizontal glides
+    // Mark this as requiring special handling
+    requiresSpecialHandling: true,
+  },
 };
 
 // Export list of available wallpaper groups
@@ -183,6 +194,49 @@ function drawWallpaperOn(pg, g) {
     for (let i = -tileRange; i <= tileRange; i++) {
       for (let j = -tileRange; j <= tileRange; j++) {
         const p = latticePointFrom(spec, a, i, j);
+        
+        // Special handling for *x (cm) - vertical mirrors + horizontal glides
+        if (g.group === "*x") {
+          // cm pattern: vertical mirrors and horizontal glide reflections (perpendicular)
+          // Vertical mirrors: through lattice points
+          // Horizontal glides: at y = b/2, shifting by a/2 horizontally only
+          
+          // 1. Original motif at lattice point
+          pg.push();
+          pg.translate(p.x, p.y);
+          pg.rotate(base);
+          drawMotifShape(pg, shape);
+          pg.pop();
+          
+          // 2. Vertical mirror (reflect across vertical line through lattice point)
+          pg.push();
+          pg.translate(p.x, p.y);
+          pg.rotate(base);
+          pg.scale(-1, 1);  // Reflect horizontally across vertical mirror
+          drawMotifShape(pg, shape);
+          pg.pop();
+          
+          // 3. Horizontal glide: shift by a/2 in x-direction and a/2 in y-direction,
+          // then reflect across horizontal axis
+          // This places the glide reflection between lattice rows
+          pg.push();
+          pg.translate(p.x + a/2, p.y + a/2);
+          pg.rotate(base);
+          pg.scale(1, -1);  // Reflect vertically (across horizontal glide)
+          drawMotifShape(pg, shape);
+          pg.pop();
+          
+          // 4. Combined: vertical mirror + horizontal glide
+          // Mirror first, then glide: results in shift + both reflections
+          pg.push();
+          pg.translate(p.x + a/2, p.y + a/2);
+          pg.rotate(base);
+          pg.scale(-1, -1);  // Both reflections
+          drawMotifShape(pg, shape);
+          pg.pop();
+          
+          continue;  // Skip standard handling for *x
+        }
         
         // Special handling for 22x (pgg) - explicit glide reflections
         if (g.group === "22x") {
@@ -359,6 +413,32 @@ function drawWallpaperOn(pg, g) {
             const cy = (center.u * b1.y + center.v * b2.y) * a;
             pg.ellipse(p.x + cx, p.y + cy, 8, 8);
           }
+        }
+      }
+    }
+    
+    // Show symmetry guides for *x (cm)
+    if (g.group === "*x") {
+      pg.strokeWeight(2);
+      pg.noFill();
+      
+      // Vertical mirror axes at x = 0 (through lattice points)
+      pg.stroke(0, 180, 255, 160); // Blue for mirrors
+      for (let i = -tileRange; i <= tileRange; i++) {
+        for (let j = -tileRange; j <= tileRange; j++) {
+          const p = latticePointFrom(spec, a, i, j);
+          // Vertical mirror through lattice point
+          pg.line(p.x, p.y - L, p.x, p.y + L);
+        }
+      }
+      
+      // Horizontal glide axes at y = b/2 (perpendicular to mirrors!)
+      pg.stroke(255, 0, 160, 160); // Magenta for glides
+      for (let i = -tileRange; i <= tileRange; i++) {
+        for (let j = -tileRange; j <= tileRange; j++) {
+          const p = latticePointFrom(spec, a, i, j);
+          // Horizontal glide at y = b/2 (between lattice rows)
+          pg.line(p.x - L, p.y + a/2, p.x + L, p.y + a/2);
         }
       }
     }

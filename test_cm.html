@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test *x (cm) Wallpaper Pattern</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: white;
+      font-family: monospace;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    label {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 5px 10px;
+      background: #333;
+      color: white;
+      border: 1px solid #666;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #444;
+    }
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <h3>*x (cm) Test - Vertical Mirrors + Horizontal Glides</h3>
+    <label>
+      <input type="checkbox" id="showGuides" checked>
+      Show Symmetry Guides
+    </label>
+    <button onclick="regenerate()">Regenerate Pattern</button>
+    <p>Blue lines: Vertical mirror axes (at x=0)</p>
+    <p>Pink lines: Horizontal glide axes (at y=b/2)</p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+  <script src="genome.js"></script>
+  <script src="pattern.js"></script>
+  <script>
+    let testGenome;
+    let showSymmetryGuides = true;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      regenerate();
+      
+      // Set up checkbox listener
+      document.getElementById('showGuides').addEventListener('change', (e) => {
+        showSymmetryGuides = e.target.checked;
+        redraw();
+      });
+    }
+
+    function regenerate() {
+      // Create a test genome specifically for cm (*x) pattern
+      testGenome = {
+        group: "*x",  // cm wallpaper group
+        motifScale: 120,
+        numShapes: 3,
+        shapes: [
+          { type: "petal", curveBias: 0.8, fatness: 1.2, radiusJitter: 0, angleJitter: 0, sizeJitter: 0 },
+          { type: "drop", curveBias: 0.6, fatness: 0.9, radiusJitter: 0, angleJitter: 0, sizeJitter: 0 },
+          { type: "arc", curveBias: 0.5, fatness: 1.0, radiusJitter: 0, angleJitter: 0, sizeJitter: 0 }
+        ],
+        palette: "warm",
+        hueShift: random(360),
+        rotation: 0,
+        overlapMode: "overlap"
+      };
+      
+      // Ensure colors
+      ensureGenomeColors(testGenome);
+      
+      redraw();
+    }
+
+    function draw() {
+      background(30);
+      
+      push();
+      translate(width/2, height/2);
+      
+      // Draw the wallpaper pattern
+      drawWallpaperOn(window, testGenome);
+      
+      pop();
+      
+      // Show pattern info
+      push();
+      fill(255);
+      noStroke();
+      textAlign(LEFT);
+      text("Group: *x (cm)", 10, height - 40);
+      text("Vertical mirrors + Horizontal glides (perpendicular)", 10, height - 20);
+      pop();
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+    }
+    
+    // Stub function for genome hash (needed by pattern.js)
+    function genomeHash(g) {
+      let hash = 0;
+      const str = JSON.stringify(g);
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return Math.abs(hash);
+    }
+  </script>
+</body>
+</html>
