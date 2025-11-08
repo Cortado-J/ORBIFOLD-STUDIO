@@ -4,12 +4,14 @@ const GROUP_SPECS = {
   // Hexagonal / triangular lattices
   "632": {                        // p6
     basis: [ {x: Math.sqrt(3), y: 0}, {x: Math.sqrt(3)/2, y: 1.5} ],
+    compositionDepth: 2,
     generators: [
       { type: "rotation", order: 6, centers: [{u:0, v:0}] }
     ]
   },
   "*632": {                       // p6m
     basis: [ {x: Math.sqrt(3), y: 0}, {x: Math.sqrt(3)/2, y: 1.5} ],
+    compositionDepth: 2,
     generators: [
       { type: "rotation", order: 6, centers: [{u:0, v:0}] },
       { type: "reflection", angle: 0,          offsets: [{u:0, v:0}] },
@@ -321,56 +323,222 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
 
   pg.push();
   pg.noFill();
-
+  const lineGuides = [];
+  const rotCenters = [];
+  const centerKeys = new Set();
+  const rotColors = [ {r:255,g:64,b:64}, {r:64,g:224,b:255}, {r:64,g:255,b:96}, {r:255,g:224,b:64}, {r:255,g:64,b:224}, {r:128,g:96,b:255} ];
+  function addLine(ang, P, isGlide){
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const nx = -dy, ny = dx;
+    const dist = (nx*P.x + ny*P.y) / Math.max(a, 1e-6);
+    const key = (isGlide? "g":"r") + "|" + (Math.round(dx*1e6)/1e6) + "," + (Math.round(dy*1e6)/1e6) + "|" + (Math.round(dist*1e3)/1e3);
+    for (const l of lineGuides){ if (l.key === key) return; }
+    lineGuides.push({ ang, P, isGlide, key });
+  }
+  function addCenter(C, ord){
+    const key = (Math.round((C.x/Math.max(a,1e-6))*1e4)/1e4) + "," + (Math.round((C.y/Math.max(a,1e-6))*1e4)/1e4);
+    if (centerKeys.has(key)) return;
+    centerKeys.add(key);
+    rotCenters.push({ C, ord });
+  }
   for (const gen of (spec.generators||[])) {
     if (gen.type === "reflection") {
-      pg.stroke(0,180,255,160); pg.strokeWeight(1);
       const offs = gen.offsets && gen.offsets.length ? gen.offsets : [{u:0,v:0}];
       for (const ofst of offs){
         const O = uvToXY(ofst.u, ofst.v);
-        const dx = Math.cos(gen.angle||0), dy = Math.sin(gen.angle||0);
-        for (let i=-tileRange; i<=tileRange; i++){
-          for (let j=-tileRange; j<=tileRange; j++){
-            const p = latticePointFrom(spec, a, i, j);
-            const cx = p.x + O.x, cy = p.y + O.y;
-            pg.line(cx - dx*L, cy - dy*L, cx + dx*L, cy + dy*L);
-          }
-        }
+        addLine(gen.angle||0, O, false);
       }
     }
-
     if (gen.type === "glide") {
-      pg.stroke(255,0,160,160); pg.strokeWeight(1);
       const offs = gen.offsets && gen.offsets.length ? gen.offsets : [{u:0,v:0}];
       const ang = gen.angle || 0;
-      const dx = Math.cos(ang), dy = Math.sin(ang);
       for (const ofst of offs){
         const O = uvToXY(ofst.u, ofst.v);
-        for (let i=-tileRange; i<=tileRange; i++){
-          for (let j=-tileRange; j<=tileRange; j++){
-            const p = latticePointFrom(spec, a, i, j);
-            const cx = p.x + O.x, cy = p.y + O.y;
-            pg.line(cx - dx*L, cy - dy*L, cx + dx*L, cy + dy*L);
-          }
-        }
+        addLine(ang, O, true);
       }
     }
-
     if (gen.type === "rotation") {
-      pg.noStroke(); pg.fill(255,200,0,120);
       const centers = gen.centers && gen.centers.length ? gen.centers : [{u:0,v:0}];
+      const ord = gen.order || 2;
       for (const c of centers){
         const C = uvToXY(c.u, c.v);
-        for (let i=-tileRange; i<=tileRange; i++){
-          for (let j=-tileRange; j<=tileRange; j++){
-            const p = latticePointFrom(spec, a, i, j);
-            pg.ellipse(p.x + C.x, p.y + C.y, 8, 8);
+        addCenter(C, ord);
+      }
+    }
+  }
+  const relTs = buildTransformSet(spec, a) || [];
+  const eps = 1e-6;
+  for (const M of relTs){
+    const a11 = M.a, a12 = M.c, a21 = M.b, a22 = M.d, tx = M.e, ty = M.f;
+    const det = a11*a22 - a21*a12;
+    if (Math.abs(det - 1) < 1e-6){
+      const angle = Math.atan2(a21, a11);
+      let angN = angle % (2*Math.PI); if (angN < 0) angN += 2*Math.PI;
+      if (Math.abs(angN) < 1e-4) continue;
+      const A = 1 - a11, B = -a12, Cc = -a21, D = 1 - a22;
+      const det2 = A*D - B*Cc;
+      if (Math.abs(det2) < eps) continue;
+      const cx = (D*tx - B*ty) / det2;
+      const cy = (-Cc*tx + A*ty) / det2;
+      const candidates = [2,3,4,6];
+      let best = 2, bestErr = 1e9;
+      for (const n of candidates){
+        const target = (2*Math.PI)/n;
+        const k = Math.max(1, Math.round(angN / Math.max(target,1e-9)));
+        const err = Math.abs(angN - k*target);
+        if (err < bestErr){ bestErr = err; best = n; }
+      }
+      addCenter({x: cx, y: cy}, best);
+    } else if (Math.abs(det + 1) < 1e-6){
+      const twoTheta = Math.atan2(a21, a11);
+      const theta = twoTheta/2;
+      const vx = Math.cos(theta), vy = Math.sin(theta);
+      const nx = -vy, ny = vx;
+      const tdotn = nx*tx + ny*ty;
+      const alpha = 0.5 * tdotn;
+      const P = { x: alpha*nx, y: alpha*ny };
+      const tdotv = vx*tx + vy*ty;
+      const isGlide = Math.abs(tdotv) > 1e-5;
+      addLine(theta, P, isGlide);
+    }
+  }
+  {
+    const hasOrder6 = (spec.generators||[]).some(gen => gen.type === "rotation" && (gen.order||0) === 6);
+    const len1 = Math.hypot(b1.x, b1.y), len2 = Math.hypot(b2.x, b2.y);
+    const dot = b1.x*b2.x + b1.y*b2.y;
+    const ang = Math.acos(Math.max(-1, Math.min(1, dot / Math.max(1e-9, len1*len2))));
+    const triLattice = hasOrder6 && Math.abs(len1 - len2) / Math.max(1, len1) < 0.02 && Math.abs(ang - Math.PI/3) < 0.03;
+    if (triLattice) {
+      const offs3 = [{u:1/3, v:1/3}, {u:2/3, v:2/3}];
+      const offs2 = [{u:0.5, v:0}, {u:0, v:0.5}, {u:0.5, v:0.5}];
+      for (const o of offs3) addCenter(uvToXY(o.u, o.v), 3);
+      for (const o of offs2) addCenter(uvToXY(o.u, o.v), 2);
+    }
+  }
+  // Draw line guides first (behind rotation centres)
+  for (const l of lineGuides){
+    if (l.isGlide){ pg.stroke(255,0,160,160); } else { pg.stroke(0,180,255,160); }
+    pg.strokeWeight(1);
+    const dx = Math.cos(l.ang), dy = Math.sin(l.ang);
+    for (let i=-tileRange; i<=tileRange; i++){
+      for (let j=-tileRange; j<=tileRange; j++){
+        const p = latticePointFrom(spec, a, i, j);
+        const cx = p.x + l.P.x, cy = p.y + l.P.y;
+        pg.line(cx - dx*L, cy - dy*L, cx + dx*L, cy + dy*L);
+      }
+    }
+  }
+  // Compute orbits among rotation centres using group transforms (modulo lattice)
+  function xyToUV(x, y){
+    const A = a*b1.x, B = a*b2.x, Cc = a*b1.y, D = a*b2.y;
+    const det = A*D - B*Cc || 1e-12;
+    const invA =  D / det, invB = -B / det, invC = -Cc / det, invD = A / det;
+    const u = invA * x + invB * y;
+    const v = invC * x + invD * y;
+    return { u, v };
+  }
+  function norm01(t){ t = t - Math.floor(t); return t < 0 ? t + 1 : t; }
+  function uvKey(u,v){
+    const uf = norm01(u), vf = norm01(v);
+    const ur = Math.round(uf*10000)/10000, vr = Math.round(vf*10000)/10000;
+    return ur + '|' + vr;
+  }
+  function applyToPoint(M, x, y){ return { x: M.a*x + M.c*y + M.e, y: M.b*x + M.d*y + M.f }; }
+
+  const n = rotCenters.length;
+  const parents = Array.from({length:n}, (_,i)=>i);
+  const find = (x)=> parents[x]===x?x:(parents[x]=find(parents[x]));
+  const unite = (a,b)=>{ a=find(a); b=find(b); if (a!==b) parents[b]=a; };
+
+  const uvKeys = [];
+  const uvMap = new Map();
+  for (let i=0;i<n;i++){
+    const { C } = rotCenters[i];
+    const { u, v } = xyToUV(C.x, C.y);
+    const k = uvKey(u, v);
+    uvKeys[i] = k;
+    if (!uvMap.has(k)) uvMap.set(k, i);
+  }
+  const transforms = buildTransformSet(spec, a) || [];
+  const T1v = uvToXY(1, 0);
+  const T2v = uvToXY(0, 1);
+  const I = matIdentity();
+  const T1 = matTranslate(T1v.x, T1v.y);
+  const T2 = matTranslate(T2v.x, T2v.y);
+  const T1n = matTranslate(-T1v.x, -T1v.y);
+  const T2n = matTranslate(-T2v.x, -T2v.y);
+  const T1p2 = matTranslate(T1v.x + T2v.x, T1v.y + T2v.y);
+  const T1m2 = matTranslate(T1v.x - T2v.x, T1v.y - T2v.y);
+  const Tn1p2 = matTranslate(-T1v.x + T2v.x, -T1v.y + T2v.y);
+  const Tn1n2 = matTranslate(-T1v.x - T2v.x, -T1v.y - T2v.y);
+  const Ts = [I, T1, T2, T1n, T2n, T1p2, T1m2, Tn1p2, Tn1n2];
+  const transforms2 = transforms.slice();
+  for (const G of transforms) {
+    for (const T of Ts) {
+      const Tin = matTranslate(-(T.e || 0), -(T.f || 0));
+      transforms2.push(matMul(matMul(T, G), Tin));
+    }
+  }
+  for (const rc of rotCenters){
+    const ord = Math.max(2, rc.ord||2);
+    for (let k=1; k<ord; k++){
+      const Rk = matAbout(matRotate((2*Math.PI*k)/ord), rc.C.x, rc.C.y);
+      transforms2.push(Rk);
+    }
+  }
+  for (let i=0;i<n;i++){
+    for (const M of transforms2){
+      const P = rotCenters[i].C;
+      const Pp = applyToPoint(M, P.x, P.y);
+      const uvp = xyToUV(Pp.x, Pp.y);
+      const kp = uvKey(uvp.u, uvp.v);
+      const j = uvMap.get(kp);
+      if (j!=null && (rotCenters[i].ord === rotCenters[j].ord)) unite(i,j);
+    }
+  }
+  const orbitId = new Map();
+  let orbitCount = 0;
+  const centerOrbit = new Array(n);
+  for (let i=0;i<n;i++){
+    const r = find(i);
+    if (!orbitId.has(r)) orbitId.set(r, orbitCount++);
+    centerOrbit[i] = orbitId.get(r);
+  }
+  for (let idx=0; idx<n; idx++){
+    const rc = rotCenters[idx];
+    const col = rotColors[centerOrbit[idx] % rotColors.length];
+    pg.stroke(0); pg.strokeWeight(1); pg.fill(col.r, col.g, col.b);
+    const ord = rc.ord || 2;
+    for (let i=-tileRange; i<=tileRange; i++){
+      for (let j=-tileRange; j<=tileRange; j++){
+        const p = latticePointFrom(spec, a, i, j);
+        const cx = p.x + rc.C.x, cy = p.y + rc.C.y;
+        const size = 16;
+        const r = size * 0.5;
+        if (ord === 2) {
+          const halfH = r;
+          const halfW = r * 0.5;
+          pg.beginShape();
+          pg.vertex(cx, cy - halfH);
+          pg.vertex(cx + halfW, cy);
+          pg.vertex(cx, cy + halfH);
+          pg.vertex(cx - halfW, cy);
+          pg.endShape(CLOSE);
+        } else {
+          const sides = ord >= 6 ? 6 : (ord >= 4 ? 4 : 3);
+          const rot = sides === 3 ? -Math.PI/2 : 0;
+          pg.beginShape();
+          for (let k=0; k<sides; k++){
+            const ang = rot + (2*Math.PI*k)/sides;
+            const vx = cx + Math.cos(ang) * r;
+            const vy = cy + Math.sin(ang) * r;
+            pg.vertex(vx, vy);
           }
+          pg.endShape(CLOSE);
         }
       }
     }
   }
-
   pg.pop();
 }
 

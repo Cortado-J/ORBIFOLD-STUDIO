@@ -110,6 +110,8 @@
     let canvas;
     let pg;
 
+    let showSymmetryGuides = false;
+
     function cloneGenome(g) {
       return JSON.parse(JSON.stringify(g));
     }
@@ -191,7 +193,10 @@
       pg.background(20);
       pg.push();
       pg.translate(pg.width / 2, pg.height / 2);
+      const prevShowGuides = showSymmetryGuides;
+      showSymmetryGuides = (state === "guides" || state === "showing-group");
       drawWallpaperOn(pg, currentGenome);
+      showSymmetryGuides = prevShowGuides;
       pg.pop();
     }
 
@@ -232,7 +237,12 @@
 
     function handleInteraction() {
       if (state === "pattern") {
+        state = "guides";
+        renderPattern();
+        drawScreen();
+      } else if (state === "guides") {
         state = "showing-group";
+        renderPattern();
         drawScreen();
       } else {
         generateNewPattern();
