@@ -62,6 +62,9 @@
     #group-label.visible {
       opacity: 1;
     }
+    /* Orbifold coloring */
+    #group-label .orb-blue { color: #66a7ff; }
+    #group-label .orb-red  { color: #ff4d4d; }
     
     @media (max-height: 600px) {
       #group-label {
@@ -199,11 +202,24 @@
       }
       if (!groupLabelEl) return;
       if (state === "showing-group" && currentGenome) {
-        groupLabelEl.textContent = currentGenome.group;
+        groupLabelEl.innerHTML = colorOrbifold(currentGenome.group);
         groupLabelEl.classList.add("visible");
       } else {
         groupLabelEl.classList.remove("visible");
       }
+    }
+
+    function colorOrbifold(sig) {
+      const s = String(sig || "");
+      let out = "";
+      let afterStar = false;
+      for (const ch of s) {
+        const isDigit = ch >= '0' && ch <= '9';
+        const isRed = (ch === '*') || (ch === 'x') || (afterStar && isDigit);
+        out += `<span class="${isRed ? 'orb-red' : 'orb-blue'}">${ch}</span>`;
+        if (ch === '*') afterStar = true;
+      }
+      return out;
     }
 
     function generateNewPattern() {
