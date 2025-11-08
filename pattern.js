@@ -42,9 +42,9 @@ const GROUP_SPECS = {
     basis: [ {x: 1, y: 0}, {x: 0.5, y: Math.sqrt(3)/2} ],
     generators: [
       { type: "rotation", order: 3, centers: [{u:0, v:0}] },
-      { type: "reflection", angle: 0,              offsets: [{u: 1/3, v: 1/3}] },
-      { type: "reflection", angle: (2*Math.PI)/3,  offsets: [{u: 1/3, v: 1/3}] },
-      { type: "reflection", angle: Math.PI/3,      offsets: [{u: 1/3, v: 1/3}] }
+      { type: "reflection", angle: Math.PI/6,      offsets: [{u: 1/3, v: 1/3}] },
+      { type: "reflection", angle: Math.PI/2,      offsets: [{u: 1/3, v: 1/3}] },
+      { type: "reflection", angle: 5*Math.PI/6,    offsets: [{u: 1/3, v: 1/3}] }
     ]
   },
 
@@ -70,7 +70,6 @@ const GROUP_SPECS = {
     compositionDepth: 2,
     generators: [
       { type: "rotation", order: 4, centers: [{u:0, v:0}] },
-      // Two diagonal glide families; include both parity offsets
       { type: "glide", angle: Math.PI/4,   offsets: [{u:0, v:0}, {u:0.5, v:0.5}], by: {u:0.5, v:0.5} },
       { type: "glide", angle: (3*Math.PI)/4, offsets: [{u:0, v:0}, {u:0.5, v:0.5}], by: {u:0.5, v:0.5} }
     ]
@@ -285,9 +284,12 @@ function drawWallpaperOn(pg, g) {
   const cellBounds = estimateCellSize({ group: g.group, motifScale: a });
   const cellW = Math.max(1, cellBounds.w || 1);
   const cellH = Math.max(1, cellBounds.h || 1);
-  const rangeX = Math.ceil((pg.width || 0) / (2 * cellW)) + 2;
-  const rangeY = Math.ceil((pg.height || 0) / (2 * cellH)) + 2;
-  const tileRange = Math.max(4, rangeX, rangeY);
+  const rangeX = Math.ceil((pg.width || 0) / (2 * cellW)) + 3;
+  const rangeY = Math.ceil((pg.height || 0) / (2 * cellH)) + 3;
+  const diagonal = Math.hypot(pg.width || 0, pg.height || 0);
+  const minCell = Math.max(1, Math.min(cellW, cellH));
+  const rangeDiag = Math.ceil(diagonal / (2 * minCell)) + 3;
+  const tileRange = Math.max(6, rangeX, rangeY, rangeDiag);
 
   const relTransforms = buildTransformSet(spec, a);
   const baseRotation = matAbout(matRotate(g.rotation || 0), 0, 0);
@@ -326,6 +328,7 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
   const lineGuides = [];
   const rotCenters = [];
   const centerKeys = new Set();
+  const centerIndex = new Map();
   const rotColors = [ {r:255,g:64,b:64}, {r:64,g:224,b:255}, {r:64,g:255,b:96}, {r:255,g:224,b:64}, {r:255,g:64,b:224}, {r:128,g:96,b:255} ];
   function addLine(ang, P, isGlide){
     const dx = Math.cos(ang), dy = Math.sin(ang);
@@ -337,8 +340,13 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
   }
   function addCenter(C, ord){
     const key = (Math.round((C.x/Math.max(a,1e-6))*1e4)/1e4) + "," + (Math.round((C.y/Math.max(a,1e-6))*1e4)/1e4);
-    if (centerKeys.has(key)) return;
+    if (centerIndex.has(key)){
+      const idx = centerIndex.get(key);
+      if ((rotCenters[idx].ord || 1) < (ord || 1)) rotCenters[idx].ord = ord;
+      return;
+    }
     centerKeys.add(key);
+    centerIndex.set(key, rotCenters.length);
     rotCenters.push({ C, ord });
   }
   for (const gen of (spec.generators||[])) {
@@ -431,6 +439,7 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
       for (const o of offs2p4g) addCenter(uvToXY(o.u, o.v), 2);
     }
     if (squareLattice && hasOrder4) {
+      addCenter(uvToXY(0, 0), 4);
       addCenter(uvToXY(0.5, 0.5), 4);
       const offs2p4 = [{u:0.5, v:0}, {u:0, v:0.5}];
       for (const o of offs2p4) addCenter(uvToXY(o.u, o.v), 2);
@@ -442,8 +451,9 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
     const reflAngles = gens.filter(gen=>gen.type==="reflection").map(gen=>gen.angle||0);
     const hasHoriz = reflAngles.some(a=> Math.abs(((a%Math.PI)+Math.PI)%Math.PI - 0) < 1e-3);
     const hasVert  = reflAngles.some(a=> Math.abs((((a-Math.PI/2)%Math.PI)+Math.PI)%Math.PI) < 1e-3);
-    if (hasHoriz) addLine(0, uvToXY(0, 0.5), false);
-    if (hasVert)  addLine(Math.PI/2, uvToXY(0.5, 0), false);
+    const rectLattice = Math.abs(ang - Math.PI/2) < 0.03;
+    if (rectLattice && hasHoriz) addLine(0, uvToXY(0, 0.5), false);
+    if (rectLattice && hasVert)  addLine(Math.PI/2, uvToXY(0.5, 0), false);
   }
   for (const l of lineGuides){
     if (l.isGlide){ pg.stroke(255,0,160,160); } else { pg.stroke(0,180,255,160); }
@@ -481,21 +491,25 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
   function applyToPoint(M, x, y){ return { x: M.a*x + M.c*y + M.e, y: M.b*x + M.d*y + M.f }; }
 
   {
-    const locMax = new Map();
-    for (const rc of rotCenters){
-      const uv = xyToUV(rc.C.x, rc.C.y);
-      const k = uvKey(uv.u, uv.v);
-      const prev = locMax.get(k) || 0;
-      if ((rc.ord||1) > prev) locMax.set(k, rc.ord||1);
+    const uv = rotCenters.map(rc => xyToUV(rc.C.x, rc.C.y));
+    const keep = new Array(rotCenters.length).fill(true);
+    const wrapD = (d)=> d - Math.round(d);
+    const tol2 = 1e-5;
+    for (let i=0;i<rotCenters.length;i++){
+      if (!keep[i]) continue;
+      for (let j=0;j<rotCenters.length;j++){
+        if (i===j) continue;
+        if ((rotCenters[j].ord||1) <= (rotCenters[i].ord||1)) continue;
+        const du = wrapD(uv[i].u - uv[j].u);
+        const dv = wrapD(uv[i].v - uv[j].v);
+        const d2 = du*du + dv*dv;
+        if (d2 < tol2){ keep[i] = false; break; }
+      }
     }
-    const kept = [];
-    for (const rc of rotCenters){
-      const uv = xyToUV(rc.C.x, rc.C.y);
-      const k = uvKey(uv.u, uv.v);
-      if ((rc.ord||1) >= (locMax.get(k) || (rc.ord||1))) kept.push(rc);
-    }
+    const filtered = [];
+    for (let i=0;i<rotCenters.length;i++) if (keep[i]) filtered.push(rotCenters[i]);
     rotCenters.length = 0;
-    Array.prototype.push.apply(rotCenters, kept);
+    Array.prototype.push.apply(rotCenters, filtered);
   }
 
   const n = rotCenters.length;
@@ -567,6 +581,21 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
     if (!orbitId.has(r)) orbitId.set(r, orbitCount++);
     centerOrbit[i] = orbitId.get(r);
   }
+  const displayOrbit = centerOrbit.slice();
+  if (g && g.group === "4*2"){
+    for (let i=0;i<n;i++){
+      if ((rotCenters[i].ord||0) !== 4) continue;
+      const uv = uvArr[i];
+      const du0 = (uv.u - 0) - Math.round(uv.u - 0);
+      const dv0 = (uv.v - 0) - Math.round(uv.v - 0);
+      const d0 = du0*du0 + dv0*dv0;
+      const du1 = (uv.u - 0.5) - Math.round(uv.u - 0.5);
+      const dv1 = (uv.v - 0.5) - Math.round(uv.v - 0.5);
+      const d1 = du1*du1 + dv1*dv1;
+      const cluster = d1 < d0 ? 1 : 0;
+      displayOrbit[i] = displayOrbit[i] * 2 + cluster;
+    }
+  }
   const centerAngle = new Array(n).fill(0);
   const orbitMembers = Array.from({length: orbitCount}, ()=>[]);
   for (let i=0;i<n;i++){ orbitMembers[centerOrbit[i]].push(i); }
@@ -596,7 +625,7 @@ function drawSymmetryGuides(pg, spec, g, { a, tileRange }){
   }
   for (let idx=0; idx<n; idx++){
     const rc = rotCenters[idx];
-    const col = rotColors[centerOrbit[idx] % rotColors.length];
+    const col = rotColors[(displayOrbit[idx] ?? centerOrbit[idx]) % rotColors.length];
     pg.stroke(0); pg.strokeWeight(1); pg.fill(col.r, col.g, col.b);
     const ord = rc.ord || 2;
     for (let i=-tileRange; i<=tileRange; i++){

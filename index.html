@@ -58,6 +58,29 @@
       text-align: center;
       white-space: nowrap;
     }
+    #next-button {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      font-size: 32px;
+      font-weight: 700;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.78);
+      border-radius: 6px;
+      border: 2px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      cursor: pointer;
+    }
+    #next-button.visible { opacity: 1; pointer-events: auto; }
     
     #group-label.visible {
       opacity: 1;
@@ -83,6 +106,7 @@
 <body>
   <div id="canvas-container">
     <div id="group-label"></div>
+    <div id="next-button" aria-label="Next pattern">➜</div>
   </div>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
@@ -107,6 +131,7 @@
 
     let containerEl;
     let groupLabelEl;
+    let nextButtonEl;
     let canvas;
     let pg;
 
@@ -137,6 +162,7 @@
     function setup() {
       containerEl = document.getElementById("canvas-container");
       groupLabelEl = document.getElementById("group-label");
+      nextButtonEl = document.getElementById("next-button");
 
       const { width: w, height: h } = applyContainerSize();
       canvas = createCanvas(w, h);
@@ -148,6 +174,14 @@
 
       generateNewPattern();
       drawScreen();
+
+      if (nextButtonEl) {
+        nextButtonEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          generateNewPattern();
+        });
+      }
     }
 
     function draw() {
@@ -209,8 +243,17 @@
       if (state === "showing-group" && currentGenome) {
         groupLabelEl.innerHTML = colorOrbifold(currentGenome.group);
         groupLabelEl.classList.add("visible");
+        if (nextButtonEl) {
+          nextButtonEl.style.top = "";
+          nextButtonEl.style.left = "";
+          nextButtonEl.style.height = "";
+          nextButtonEl.style.width = "";
+          nextButtonEl.style.fontSize = "";
+          nextButtonEl.classList.add('visible');
+        }
       } else {
         groupLabelEl.classList.remove("visible");
+        if (nextButtonEl) nextButtonEl.classList.remove('visible');
       }
     }
 
@@ -235,7 +278,7 @@
       drawScreen();
     }
 
-    function handleInteraction() {
+    function handleInteraction(targetId) {
       if (state === "pattern") {
         state = "guides";
         renderPattern();
@@ -244,18 +287,23 @@
         state = "showing-group";
         renderPattern();
         drawScreen();
-      } else {
-        generateNewPattern();
+      } else if (state === "showing-group") {
+        // Click anywhere except the next button: return to pattern (hide group & guides)
+        if (targetId !== 'next-button') {
+          state = "pattern";
+          renderPattern();
+          drawScreen();
+        }
       }
     }
 
-    function mousePressed() {
-      handleInteraction();
+    function mousePressed(e) {
+      handleInteraction(e?.target?.id);
       return false;
     }
 
-    function touchStarted() {
-      handleInteraction();
+    function touchStarted(e) {
+      handleInteraction(e?.target?.id);
       return false;
     }
 
