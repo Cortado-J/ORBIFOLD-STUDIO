@@ -33,18 +33,18 @@ const GROUP_SPECS = {
     basis: [ {x: 1, y: 0}, {x: 0.5, y: Math.sqrt(3)/2} ],
     generators: [
       { type: "rotation", order: 3, centers: [{u:0, v:0}] },
-      { type: "reflection", angle: 0,            offsets: [{u:0, v:0}] },
-      { type: "reflection", angle: Math.PI/3,    offsets: [{u:0, v:0}] },
-      { type: "reflection", angle: (2*Math.PI)/3, offsets: [{u:0, v:0}] }
+      { type: "reflection", angle: Math.PI/6,      offsets: [{u: 1/3, v: 1/3}] },
+      { type: "reflection", angle: Math.PI/2,      offsets: [{u: 1/3, v: 1/3}] },
+      { type: "reflection", angle: 5*Math.PI/6,    offsets: [{u: 1/3, v: 1/3}] }
     ]
   },
   "3*3": {                        // p31m
     basis: [ {x: 1, y: 0}, {x: 0.5, y: Math.sqrt(3)/2} ],
     generators: [
       { type: "rotation", order: 3, centers: [{u:0, v:0}] },
-      { type: "reflection", angle: Math.PI/6,      offsets: [{u: 1/3, v: 1/3}] },
-      { type: "reflection", angle: Math.PI/2,      offsets: [{u: 1/3, v: 1/3}] },
-      { type: "reflection", angle: 5*Math.PI/6,    offsets: [{u: 1/3, v: 1/3}] }
+      { type: "reflection", angle: 0,            offsets: [{u:0, v:0}] },
+      { type: "reflection", angle: Math.PI/3,    offsets: [{u:0, v:0}] },
+      { type: "reflection", angle: (2*Math.PI)/3, offsets: [{u:0, v:0}] }
     ]
   },
 
