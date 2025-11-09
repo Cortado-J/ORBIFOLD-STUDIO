@@ -236,7 +236,7 @@ function withMeta(g) {
 function randomGenome() {
   const groups = getAvailableGroups();
   const paletteKeys = Object.keys(palettes);
-  const motifScale = random(48, 88);
+  const motifScale = random(56, 102);
   const hueShift = random(-12, 12);
   const shapeStyle = random(["curved", "straight", "mixed", "mixed"]);
   const overlapMode = random(["overlap", "touch", "space", "mixed"]);
@@ -271,8 +271,8 @@ function mutateGenome(g, rate = 0.25) {
   ensureGenomeColors(m);
   m.hueShift += random(-6, 6) * rate;
   // scale multiplicative change towards 1 by rate
-  let scaleJitter = lerp(1, random(0.9, 1.15), rate);
-  m.motifScale = constrain(m.motifScale * scaleJitter, 32, 140);
+  let scaleJitter = lerp(1, random(0.92, 1.18), rate);
+  m.motifScale = constrain(m.motifScale * scaleJitter, 34, 150);
   if (random() < 0.12 * rate) m.palette = random(Object.keys(palettes));
   if (random() < 0.15 * rate) m.group = random(getAvailableGroups()); 
   const priorStyle = m.shapeStyle || "mixed";

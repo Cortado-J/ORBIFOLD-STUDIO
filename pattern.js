@@ -93,13 +93,13 @@ function createMotif(pg, g, s, palette, spec) {
     let shape = g.shapes[i];
     const localMode = pickMode(mode);
     let baseRadiusFactor = 0.35;
-    let baseScaleFactor = 1;
+    let baseScaleFactor = 1.05;
     if (localMode === "space") {
       baseRadiusFactor = 0.85;
-      baseScaleFactor = 0.85;
+      baseScaleFactor = 0.9;
     } else if (localMode === "touch") {
       baseRadiusFactor = 0.6;
-      baseScaleFactor = 0.95;
+      baseScaleFactor = 0.97;
     }
     const offsetRadius = ringRadius * baseRadiusFactor;
     const noiseRadius = (rng() - 0.5) * ringRadius * 0.12;
@@ -113,6 +113,7 @@ function createMotif(pg, g, s, palette, spec) {
     const offsetX = cos(finalAngle) * finalRadius;
     const offsetY = sin(finalAngle) * finalRadius;
     const scaleFactor = baseScaleFactor * jitterScale;
+    const baseSize = constrain(s * 1.35, 34, 95);
     motif.push({
       type: shape.type,
       curveBias: shape.curveBias,
@@ -121,7 +122,8 @@ function createMotif(pg, g, s, palette, spec) {
       colour: chosenCols[i % chosenCols.length],
       offsetX,
       offsetY,
-      scaleFactor
+      scaleFactor,
+      size: baseSize
     });
   }
   return motif;
@@ -132,13 +134,14 @@ function drawMotifShape(pg, s) {
   const ox = s.offsetX || 0;
   const oy = s.offsetY || 0;
   const scaleFactor = s.scaleFactor || 1;
+  const baseSize = s.size || 40;
   pg.push();
   pg.translate(ox, oy);
   if (abs(scaleFactor - 1) > 0.001) pg.scale(scaleFactor);
   pg.fill(s.colour);
   pg.noStroke();
   pg.rotate(s.rotation);
-  drawShapeVariant(pg, s.type, 40, s.curveBias, s.fatness);
+  drawShapeVariant(pg, s.type, baseSize, s.curveBias, s.fatness);
   pg.pop();
 }
 
