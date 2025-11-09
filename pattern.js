@@ -627,11 +627,27 @@ function renderLineGuides(ctx) {
 }
 
 function prepareRotationCenterMetadata(ctx) {
+  deduplicateRotationCenters(ctx);
+  const graph = buildRotationOrbitGraph(ctx);
+  const orbitInfo = computeRotationOrbits(ctx, graph);
+  const centerAngle = computeRotationAngles(ctx, graph, orbitInfo);
+
+  return {
+    uvArr: graph.uvArr,
+    minNeighborDist: graph.minNeighborDist,
+    centerOrbit: orbitInfo.centerOrbit,
+    displayOrbit: orbitInfo.displayOrbit,
+    centerAngle,
+  };
+}
+
+function deduplicateRotationCenters(ctx) {
   const rotCenters = ctx.rotCenters;
   const uv = rotCenters.map((rc) => ctx.xyToUV(rc.C.x, rc.C.y));
   const keep = new Array(rotCenters.length).fill(true);
-  const wrapD = (d) => d - Math.round(d);
   const tol2 = 1e-5;
+
+  const wrapD = (d) => d - Math.round(d);
 
   for (let i = 0; i < rotCenters.length; i++) {
     if (!keep[i]) continue;
@@ -654,26 +670,18 @@ function prepareRotationCenterMetadata(ctx) {
   }
   rotCenters.length = 0;
   Array.prototype.push.apply(rotCenters, filtered);
+}
 
+function buildRotationOrbitGraph(ctx) {
+  const rotCenters = ctx.rotCenters;
   const n = rotCenters.length;
-  const parents = Array.from({ length: n }, (_, i) => i);
-  const find = (x) => (parents[x] === x ? x : (parents[x] = find(parents[x])));
-  const unite = (a, b) => {
-    a = find(a);
-    b = find(b);
-    if (a !== b) parents[b] = a;
-  };
-
-  const uvArr = [];
-  const uvMap = new Map();
+  const uvArr = new Array(n);
   const minNeighborDist = new Array(n).fill(Infinity);
 
   for (let i = 0; i < n; i++) {
     const { C } = rotCenters[i];
     const { u, v } = ctx.xyToUV(C.x, C.y);
     uvArr[i] = { u, v };
-    const key = ctx.uvKey(u, v);
-    if (!uvMap.has(key)) uvMap.set(key, i);
   }
 
   for (let i = 0; i < n; i++) {
@@ -693,7 +701,7 @@ function prepareRotationCenterMetadata(ctx) {
   const transforms = buildTransformSet(ctx.spec, ctx.a) || [];
   const T1v = ctx.uvToXY(1, 0);
   const T2v = ctx.uvToXY(0, 1);
-  const Ts = [
+  const translations = [
     matIdentity(),
     matTranslate(T1v.x, T1v.y),
     matTranslate(T2v.x, T2v.y),
@@ -707,7 +715,7 @@ function prepareRotationCenterMetadata(ctx) {
 
   const transforms2 = transforms.slice();
   for (const G of transforms) {
-    for (const T of Ts) {
+    for (const T of translations) {
       const Tin = matTranslate(-(T.e || 0), -(T.f || 0));
       transforms2.push(matMul(matMul(T, G), Tin));
     }
@@ -720,6 +728,7 @@ function prepareRotationCenterMetadata(ctx) {
     }
   }
 
+  const adjacency = Array.from({ length: n }, () => new Set());
   for (let i = 0; i < n; i++) {
     for (const M of transforms2) {
       const P = rotCenters[i].C;
@@ -737,7 +746,34 @@ function prepareRotationCenterMetadata(ctx) {
           bestJ = j;
         }
       }
-      if (bestJ >= 0 && bestD < 1e-5) unite(i, bestJ);
+      if (bestJ >= 0 && bestD < 1e-5) {
+        adjacency[i].add(bestJ);
+        adjacency[bestJ].add(i);
+      }
+    }
+  }
+
+  return {
+    uvArr,
+    minNeighborDist,
+    adjacency,
+  };
+}
+
+function computeRotationOrbits(ctx, graph) {
+  const n = ctx.rotCenters.length;
+  const parents = Array.from({ length: n }, (_, i) => i);
+
+  const find = (x) => (parents[x] === x ? x : (parents[x] = find(parents[x])));
+  const unite = (a, b) => {
+    a = find(a);
+    b = find(b);
+    if (a !== b) parents[b] = a;
+  };
+
+  for (let i = 0; i < n; i++) {
+    for (const j of graph.adjacency[i]) {
+      unite(i, j);
     }
   }
 
@@ -753,31 +789,71 @@ function prepareRotationCenterMetadata(ctx) {
   const displayOrbit = centerOrbit.slice();
   if (ctx.genome && ctx.genome.group === "4*2") {
     for (let i = 0; i < n; i++) {
-      if ((rotCenters[i].ord || 0) !== 4) continue;
-      const uvp = uvArr[i];
-      const du0 = wrap01Delta(uvp.u - 0);
-      const dv0 = wrap01Delta(uvp.v - 0);
+      if ((ctx.rotCenters[i].ord || 0) !== 4) continue;
+      const uv = graph.uvArr[i];
+      const du0 = wrap01Delta(uv.u - 0);
+      const dv0 = wrap01Delta(uv.v - 0);
       const d0 = du0 * du0 + dv0 * dv0;
-      const du1 = wrap01Delta(uvp.u - 0.5);
-      const dv1 = wrap01Delta(uvp.v - 0.5);
+      const du1 = wrap01Delta(uv.u - 0.5);
+      const dv1 = wrap01Delta(uv.v - 0.5);
       const d1 = du1 * du1 + dv1 * dv1;
       const cluster = d1 < d0 ? 1 : 0;
       displayOrbit[i] = displayOrbit[i] * 2 + cluster;
     }
   }
 
+  return {
+    centerOrbit,
+    displayOrbit,
+  };
+}
+
+function computeRotationAngles(ctx, graph, orbitInfo) {
+  const { centerOrbit } = orbitInfo;
+  const n = ctx.rotCenters.length;
   const centerAngle = new Array(n).fill(0);
-  const orbitMembers = Array.from({ length: orbitCount }, () => []);
+
+  const orbitMembers = Array.from({ length: Math.max(...centerOrbit, 0) + 1 }, () => []);
   for (let i = 0; i < n; i++) orbitMembers[centerOrbit[i]].push(i);
 
-  for (let oid = 0; oid < orbitCount; oid++) {
+  const transforms = buildTransformSet(ctx.spec, ctx.a) || [];
+  const T1v = ctx.uvToXY(1, 0);
+  const T2v = ctx.uvToXY(0, 1);
+  const translations = [
+    matIdentity(),
+    matTranslate(T1v.x, T1v.y),
+    matTranslate(T2v.x, T2v.y),
+    matTranslate(-T1v.x, -T1v.y),
+    matTranslate(-T2v.x, -T2v.y),
+    matTranslate(T1v.x + T2v.x, T1v.y + T2v.y),
+    matTranslate(T1v.x - T2v.x, T1v.y - T2v.y),
+    matTranslate(-T1v.x + T2v.x, -T1v.y + T2v.y),
+    matTranslate(-T1v.x - T2v.x, -T1v.y - T2v.y),
+  ];
+
+  const transforms2 = transforms.slice();
+  for (const G of transforms) {
+    for (const T of translations) {
+      const Tin = matTranslate(-(T.e || 0), -(T.f || 0));
+      transforms2.push(matMul(matMul(T, G), Tin));
+    }
+  }
+  for (const rc of ctx.rotCenters) {
+    const ord = Math.max(2, rc.ord || 2);
+    for (let k = 1; k < ord; k++) {
+      const Rk = matAbout(matRotate((2 * Math.PI * k) / ord), rc.C.x, rc.C.y);
+      transforms2.push(Rk);
+    }
+  }
+
+  for (let oid = 0; oid < orbitMembers.length; oid++) {
     const members = orbitMembers[oid];
-    if (!members.length) continue;
+    if (!members || !members.length) continue;
     let root = members[0];
     for (const idx of members) {
-      const uvr = uvArr[idx];
-      const uvroot = uvArr[root];
-      if (uvr.u < uvroot.u - 1e-6 || (Math.abs(uvr.u - uvroot.u) < 1e-6 && uvr.v < uvroot.v)) {
+      const uv = graph.uvArr[idx];
+      const uvroot = graph.uvArr[root];
+      if (uv.u < uvroot.u - 1e-6 || (Math.abs(uv.u - uvroot.u) < 1e-6 && uv.v < uvroot.v)) {
         root = idx;
       }
     }
@@ -789,8 +865,8 @@ function prepareRotationCenterMetadata(ctx) {
         if (Math.abs(detM - 1) > 1e-6) continue;
         const Pp = ctx.applyToPoint(M, ctx.rotCenters[root].C.x, ctx.rotCenters[root].C.y);
         const uvp = ctx.xyToUV(Pp.x, Pp.y);
-        const du = wrap01Delta(uvp.u - uvArr[member].u);
-        const dv = wrap01Delta(uvp.v - uvArr[member].v);
+        const du = wrap01Delta(uvp.u - graph.uvArr[member].u);
+        const dv = wrap01Delta(uvp.v - graph.uvArr[member].v);
         const d2 = du * du + dv * dv;
         if (d2 < bestD) {
           bestD = d2;
@@ -801,13 +877,7 @@ function prepareRotationCenterMetadata(ctx) {
     }
   }
 
-  return {
-    uvArr,
-    minNeighborDist,
-    centerOrbit,
-    displayOrbit,
-    centerAngle,
-  };
+  return centerAngle;
 }
 
 function renderRotationCenters(ctx, meta) {
