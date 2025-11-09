@@ -573,7 +573,7 @@ function renderRotationCenters(ctx, meta) {
   for (let idx = 0; idx < ctx.rotCenters.length; idx++) {
     const rc = ctx.rotCenters[idx];
     const neighborDist = Math.max(minNeighborDist[idx] || 0, 1e-6);
-    const markerSize = Math.max(neighborDist / 8, 4);
+    const markerSize = Math.max(neighborDist * 0.15, 4);
     const col = ctx.rotColors[(displayOrbit[idx] ?? centerOrbit[idx]) % ctx.rotColors.length];
     ctx.pg.stroke(0);
     ctx.pg.strokeWeight(1);

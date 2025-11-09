@@ -58,18 +58,17 @@ function createMotif(pg, g, s, palette, spec) {
     };
   }
   // Seed RNG purely from genome traits so previews and saved pool items match
-  const seedBase = genomeHash(g);
+  const seedBase = genomeHash(Object.assign({}, g, { motifScale: g.seedMotifScale ?? g.motifScale }));
   const rng = splitmix32(seedBase);
 
   colorMode(HSB, 360, 100, 100);
   let chosenCols = [];
+  const baseColorsHSB = ensureGenomeColors(g);
   for (let i = 0; i < g.numShapes; i++) {
-    // choose base palette index deterministically
-    const baseIdx = floor(rng() * paletteSet.length) % paletteSet.length;
-    let base = color(paletteSet[baseIdx]);
-    let h = (hue(base) + g.hueShift + (rng() * 16 - 8)) % 360;
-    let sat = constrain(saturation(base) + (rng() * 20 - 10), 40, 100);
-    let bri = constrain(brightness(base) + (rng() * 20 - 10), 40, 100);
+    const baseCol = baseColorsHSB[(i) % max(1, baseColorsHSB.length)] || { h: 0, s: 60, b: 80 };
+    const h = (baseCol.h + (g.hueShift || 0)) % 360;
+    const sat = constrain(baseCol.s, 0, 100);
+    const bri = constrain(baseCol.b, 0, 100);
     chosenCols.push(color(h, sat, bri));
   }
   colorMode(RGB, 255);

@@ -173,6 +173,7 @@
     let pg;
 
     let showSymmetryGuides = false;
+    const baseDevicePixelRatio = Math.max(0.1, window.devicePixelRatio || 1);
 
     function cloneGenome(g) {
       return JSON.parse(JSON.stringify(g));
@@ -205,10 +206,12 @@
       const { width: w, height: h } = applyContainerSize();
       canvas = createCanvas(w, h);
       canvas.parent(containerEl);
+      pixelDensity(baseDevicePixelRatio);
       angleMode(RADIANS);
       noLoop();
 
       pg = createGraphics(w, h);
+      if (pg.pixelDensity) pg.pixelDensity(baseDevicePixelRatio);
 
       generateNewPattern();
       drawScreen();
@@ -245,27 +248,34 @@
     function updateCurrentGenomeScale() {
       if (!baseGenome) return;
       const rect = computeViewportRect();
+      const currentPixelRatio = Math.max(0.1, window.devicePixelRatio || 1);
+      const zoomFactor = currentPixelRatio / baseDevicePixelRatio;
+      const effectiveWidth = rect.width * zoomFactor;
+      const effectiveHeight = rect.height * zoomFactor;
+      if (!baseGenome.seedMotifScale) baseGenome.seedMotifScale = baseGenome.motifScale;
       const baseCell = estimateCellSize(baseGenome);
       const safeCellW = Math.max(1, baseCell.w);
       const safeCellH = Math.max(1, baseCell.h);
       const horizontalSpan = safeCellW * PATTERN_REPEATS_X;
       const minimumVerticalSpan = 2 * horizontalSpan;
       const configuredVerticalSpan = safeCellH * PATTERN_REPEATS_Y;
-      const verticalSpanForViewport = horizontalSpan * (rect.height / rect.width);
+      const verticalSpanForViewport = horizontalSpan * (effectiveHeight / Math.max(1, effectiveWidth));
       const verticalSpan = Math.max(
         minimumVerticalSpan,
         configuredVerticalSpan,
         verticalSpanForViewport
       );
       let scaleFactor = Math.min(
-        rect.width / horizontalSpan,
-        rect.height / verticalSpan
+        effectiveWidth / horizontalSpan,
+        effectiveHeight / verticalSpan
       );
       if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) {
         scaleFactor = 1;
       }
       const scaledGenome = cloneGenome(baseGenome);
-      scaledGenome.motifScale = baseGenome.motifScale * scaleFactor;
+      const baseScale = baseGenome.seedMotifScale || baseGenome.motifScale || 1;
+      scaledGenome.motifScale = baseScale * scaleFactor;
+      scaledGenome.seedMotifScale = baseScale;
       currentGenome = scaledGenome;
     }
 
@@ -278,6 +288,7 @@
       if (pg.width !== rect.width || pg.height !== rect.height) {
         pg.resizeCanvas(rect.width, rect.height);
       }
+      if (pg.pixelDensity) pg.pixelDensity(baseDevicePixelRatio);
       pg.background(20);
       pg.push();
       pg.translate(pg.width / 2, pg.height / 2);
@@ -335,6 +346,7 @@
 
     function generateNewPattern() {
       baseGenome = randomGenome();
+      baseGenome.seedMotifScale = baseGenome.motifScale;
       state = "pattern";
       updateCurrentGenomeScale();
       renderPattern();
