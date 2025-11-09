@@ -569,11 +569,42 @@ function computeRotationAngles(ctx, graph, orbitInfo) {
 
 function renderRotationCenters(ctx, meta) {
   const { uvArr, minNeighborDist, centerOrbit, displayOrbit, centerAngle } = meta;
+  const isCoarsePointer =
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(pointer: coarse)").matches
+      : false;
+  const mobileScaleBoost = isCoarsePointer ? 6 : 1;
+  const maxRatio = isCoarsePointer ? 1.5 : 0.5;
+  const minSize = isCoarsePointer ? 48 : 12;
 
   for (let idx = 0; idx < ctx.rotCenters.length; idx++) {
     const rc = ctx.rotCenters[idx];
     const neighborDist = Math.max(minNeighborDist[idx] || 0, 1e-6);
-    const markerSize = Math.max(neighborDist * 0.15, 4);
+    let baseDist = neighborDist;
+    if (baseDist < 1e-3) baseDist = ctx.a;
+    if (isCoarsePointer) baseDist = Math.max(baseDist, ctx.fallbackNeighborDist);
+    let markerSize = baseDist * 0.3 * mobileScaleBoost;
+    if (markerSize < minSize) markerSize = minSize;
+    let maxSize = ctx.a * maxRatio;
+    if (isCoarsePointer) maxSize = Math.max(maxSize, ctx.fallbackNeighborDist * 0.8);
+    if (markerSize > maxSize) markerSize = maxSize;
+    
+    // Debug logging for mobile rotation guide calculations
+    if (idx === 0 && typeof console !== "undefined") {
+      console.log("Rotation guide sizing:", {
+        isCoarsePointer,
+        neighborDist,
+        baseDist,
+        markerSize,
+        minSize,
+        maxSize,
+        mobileScaleBoost,
+        maxRatio,
+        "ctx.a": ctx.a,
+        fallbackNeighborDist: ctx.fallbackNeighborDist
+      });
+    }
+
     const col = ctx.rotColors[(displayOrbit[idx] ?? centerOrbit[idx]) % ctx.rotColors.length];
     ctx.pg.stroke(0);
     ctx.pg.strokeWeight(1);
