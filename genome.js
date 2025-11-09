@@ -18,8 +18,30 @@
  * a light mutation pass for variation.
  * Supporting helpers (`genomeHash`, etc.) keep previews deterministic.
  */
-const CURVED_SHAPES = ["petal", "leaf", "blade", "drop", "arc"];
-const STRAIGHT_SHAPES = ["bar", "triangle", "kite", "spoke", "chevron"];
+const CURVED_SHAPES = [
+  "petal",
+  "leaf",
+  "blade",
+  "drop",
+  "arc",
+  "oval",
+  "heart",
+  "crescent",
+  "wave",
+  "shell",
+];
+const STRAIGHT_SHAPES = [
+  "bar",
+  "triangle",
+  "kite",
+  "spoke",
+  "chevron",
+  "diamond",
+  "arrow",
+  "cross",
+  "trapezoid",
+  "zigzag",
+];
 const OVERLAP_MODES = ["overlap", "touch", "space", "mixed"];
 const OVERLAP_SUMMARY_CODES = {
   overlap: "Oo",

@@ -114,6 +114,8 @@ function createMotif(pg, g, s, palette, spec) {
     const offsetY = sin(finalAngle) * finalRadius;
     const scaleFactor = baseScaleFactor * jitterScale;
     const baseSize = constrain(s * 1.35, 34, 95);
+    const progressiveScale = count > 1 ? 1 - 0.3 * (i / (count - 1)) : 1;
+    const finalSize = baseSize * progressiveScale;
     motif.push({
       type: shape.type,
       curveBias: shape.curveBias,
@@ -123,7 +125,7 @@ function createMotif(pg, g, s, palette, spec) {
       offsetX,
       offsetY,
       scaleFactor,
-      size: baseSize
+      size: finalSize
     });
   }
   return motif;
@@ -209,6 +211,121 @@ function drawShapeVariant(pg, type, s, bias, fat) {
       pg.vertex(s * 0.6, -s * 0.2);
       pg.vertex(0, s * 0.6);
       break;
+    case "oval": {
+      const rx = s * (0.45 + 0.4 * bias);
+      const ry = s * (0.3 + 0.5 * fat);
+      const segments = 18;
+      for (let i = 0; i < segments; i++) {
+        const angle = (TWO_PI * i) / segments;
+        pg.vertex(rx * cos(angle), ry * sin(angle));
+      }
+      break;
+    }
+    case "heart": {
+      const width = s * (0.55 + 0.35 * bias);
+      const height = s * (0.65 + 0.25 * fat);
+      pg.vertex(0, -height * 0.25);
+      pg.bezierVertex(width * 0.6, -height, width, -height * 0.15, 0, height);
+      pg.bezierVertex(-width, -height * 0.15, -width * 0.6, -height, 0, -height * 0.25);
+      break;
+    }
+    case "crescent": {
+      const outerR = s * (0.6 + 0.3 * fat);
+      const innerR = outerR * (0.45 + 0.25 * bias);
+      const offset = s * (0.2 + 0.2 * bias);
+      const steps = 16;
+      for (let i = 0; i <= steps; i++) {
+        const angle = -HALF_PI + (PI * i) / steps;
+        pg.vertex(outerR * cos(angle), outerR * sin(angle));
+      }
+      for (let i = steps; i >= 0; i--) {
+        const angle = -HALF_PI + (PI * i) / steps;
+        pg.vertex(innerR * cos(angle) - offset, innerR * sin(angle));
+      }
+      break;
+    }
+    case "wave": {
+      const width = s * (0.8 + 0.2 * bias);
+      const amplitude = s * (0.35 + 0.25 * fat);
+      pg.vertex(-width * 0.5, amplitude * 0.2);
+      pg.bezierVertex(-width * 0.35, -amplitude, -width * 0.15, -amplitude, 0, 0);
+      pg.bezierVertex(width * 0.15, amplitude, width * 0.35, amplitude, width * 0.5, 0);
+      pg.vertex(width * 0.5, amplitude * 0.45);
+      pg.vertex(-width * 0.5, amplitude * 0.45);
+      break;
+    }
+    case "shell": {
+      const width = s * (0.55 + 0.3 * bias);
+      const height = s * (0.75 + 0.2 * fat);
+      pg.vertex(0, -height);
+      pg.bezierVertex(width, -height * 0.6, width * 0.7, height * 0.2, 0, height * 0.85);
+      pg.bezierVertex(-width * 0.7, height * 0.2, -width, -height * 0.6, 0, -height);
+      pg.bezierVertex(width * 0.35, -height * 0.5, width * 0.25, -height * 0.2, 0, -height * 0.1);
+      pg.bezierVertex(-width * 0.25, -height * 0.2, -width * 0.35, -height * 0.5, 0, -height);
+      break;
+    }
+    case "diamond": {
+      const width = s * (0.45 + 0.35 * bias);
+      const height = s * (0.7 + 0.2 * fat);
+      pg.vertex(0, -height);
+      pg.vertex(width, 0);
+      pg.vertex(0, height);
+      pg.vertex(-width, 0);
+      break;
+    }
+    case "arrow": {
+      const shaftWidth = s * (0.18 + 0.2 * fat);
+      const shaftLength = s * (0.45 + 0.3 * bias);
+      const headWidth = s * (0.55 + 0.3 * bias);
+      const headLength = s * (0.5 + 0.2 * fat);
+      pg.vertex(-shaftWidth, -shaftLength);
+      pg.vertex(shaftWidth, -shaftLength);
+      pg.vertex(shaftWidth, 0);
+      pg.vertex(headWidth, 0);
+      pg.vertex(0, headLength);
+      pg.vertex(-headWidth, 0);
+      pg.vertex(-shaftWidth, 0);
+      break;
+    }
+    case "cross": {
+      const arm = s * (0.25 + 0.35 * fat);
+      const thickness = s * (0.14 + 0.25 * bias);
+      pg.vertex(-thickness, -arm);
+      pg.vertex(thickness, -arm);
+      pg.vertex(thickness, -thickness);
+      pg.vertex(arm, -thickness);
+      pg.vertex(arm, thickness);
+      pg.vertex(thickness, thickness);
+      pg.vertex(thickness, arm);
+      pg.vertex(-thickness, arm);
+      pg.vertex(-thickness, thickness);
+      pg.vertex(-arm, thickness);
+      pg.vertex(-arm, -thickness);
+      pg.vertex(-thickness, -thickness);
+      break;
+    }
+    case "trapezoid": {
+      const bottom = s * (0.5 + 0.4 * fat);
+      const top = s * (0.25 + 0.35 * bias);
+      const height = s * (0.6 + 0.2 * fat);
+      pg.vertex(-bottom, height * 0.5);
+      pg.vertex(bottom, height * 0.5);
+      pg.vertex(top, -height * 0.5);
+      pg.vertex(-top, -height * 0.5);
+      break;
+    }
+    case "zigzag": {
+      const width = s * (0.55 + 0.35 * bias);
+      const height = s * (0.65 + 0.25 * fat);
+      pg.vertex(-width, -height * 0.3);
+      pg.vertex(-width * 0.45, -height * 0.6);
+      pg.vertex(0, -height * 0.1);
+      pg.vertex(width * 0.45, -height * 0.6);
+      pg.vertex(width, -height * 0.3);
+      pg.vertex(width * 0.25, height * 0.6);
+      pg.vertex(-width * 0.25, height * 0.6);
+      break;
+    }
   }
   pg.endShape(CLOSE);
 }
