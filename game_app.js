@@ -711,6 +711,7 @@ function ensureP5Globals(p5Instance) {
       degrees: bind(p5Instance.degrees),
       colorMode: bind(p5Instance.colorMode),
       color: bind(p5Instance.color),
+      createVector: bind(p5Instance.createVector),
     };
 
     Object.entries(p5Aliases).forEach(([name, fn]) => {
