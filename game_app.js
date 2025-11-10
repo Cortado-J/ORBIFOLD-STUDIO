@@ -1,7 +1,7 @@
 (function (global) {
   "use strict";
 
-  const HOLD_DURATION_MS = 700;
+  const WRONG_GUESS_LOCK_MS = 1000;
   const PATTERN_REPEATS_X = 3;
   const PATTERN_REPEATS_Y = 6;
   const BACKGROUND_COLOR = 20;
@@ -28,9 +28,11 @@
     currentGenome: null,
     baseGenome: null,
     showGuides: false,
-    holdStates: new Map(),
     orbButtons: new Map(),
     disabledOrbs: new Set(),
+    allowedOrbs: null,
+    inputLocked: false,
+    inputLockTimer: null,
     availableHints: { 1: true, 2: true, 3: true, 4: true },
     nextHintOrder: null,
     timers: {
@@ -204,12 +206,13 @@
         btn.type = "button";
         btn.dataset.orb = orb;
         btn.setAttribute("aria-pressed", "false");
-        btn.innerHTML = `<span class="hold-ring"></span><span class="label">${formatOrbLabel(orb)}</span>`;
+        btn.innerHTML = `<span class="label">${formatOrbLabel(orb)}</span>`;
         elements.orbGrid.appendChild(btn);
         state.orbButtons.set(orb, btn);
-        attachHoldHandlers(btn, orb);
+        attachOrbHandlers(btn, orb);
       }
     }
+    applyOrbButtonAvailability();
   }
 
   function bindControls() {
@@ -283,6 +286,8 @@
       state.showGuides = false;
       state.currentItem = null;
       state.disabledOrbs.clear();
+      setAllowedOrbs(level);
+      setInputLock(false);
       hideSetupScreen();
       resetHintUi();
       hideSummary();
@@ -306,12 +311,15 @@
       setHintState(order);
     });
 
-    service.on(events.GUESS_EVALUATED, ({ guess }) => {
+    service.on(events.GUESS_EVALUATED, ({ guess, correct }) => {
       const orb = ensureOrb(guess);
       const btn = state.orbButtons.get(orb);
       if (btn) {
         btn.classList.add("incorrect");
         btn.disabled = true;
+      }
+      if (!correct) {
+        setInputLock(true, WRONG_GUESS_LOCK_MS);
       }
     });
 
@@ -330,16 +338,18 @@
       updateHudIdle();
       showSummary(summary, gatePassed);
       refreshLevelSelect();
+      setInputLock(false);
+      setAllowedOrbs(null);
     });
   }
 
   function activateItem(item, index, total) {
     state.timers.itemStart = performance.now();
+    setInputLock(false);
     state.orbButtons.forEach(btn => {
-      btn.disabled = false;
       btn.classList.remove("incorrect", "correct", "assisted");
-      resetHoldVisuals(btn);
     });
+    applyOrbButtonAvailability();
     renderPatternForItem(item);
     service.onItemShown?.(item.id);
   }
@@ -449,6 +459,7 @@
     }
     state.nextHintOrder = null;
     updateHintButton();
+    setInputLock(false);
   }
 
   function updateHud(runState) {
@@ -506,72 +517,67 @@
     requestAnimationFrame(frame);
   }
 
-  function attachHoldHandlers(btn, orb) {
-    btn.addEventListener("pointerdown", (ev) => {
-      if (btn.disabled || !state.runActive) return;
-      ev.preventDefault();
-      beginHold(btn, orb);
-    });
-    btn.addEventListener("pointerup", () => finishHold(btn, true));
-    btn.addEventListener("pointerleave", () => finishHold(btn, false));
-    btn.addEventListener("pointercancel", () => finishHold(btn, false));
-    btn.addEventListener("keydown", (ev) => {
-      if (btn.disabled || !state.runActive) return;
-      if (ev.code === "Space" || ev.code === "Enter") {
-        ev.preventDefault();
-        beginHold(btn, orb);
-      }
-    });
-    btn.addEventListener("keyup", (ev) => {
-      if (ev.code === "Space" || ev.code === "Enter") {
-        finishHold(btn, true);
-      }
-    });
+  function attachOrbHandlers(btn, orb) {
+    btn.addEventListener("click", () => handleOrbGuess(btn, orb));
   }
 
-  function beginHold(btn, orb) {
-    if (state.holdStates.has(btn)) return;
-    const hold = {
-      start: performance.now(),
-      orb,
-      frame: null,
-      triggered: false,
-    };
-    btn.style.setProperty("--hold-active", "1");
-    const step = () => {
-      const elapsed = performance.now() - hold.start;
-      const progress = Math.min(1, elapsed / HOLD_DURATION_MS);
-      btn.style.setProperty("--hold-progress", `${progress}`);
-      if (progress >= 1 && !hold.triggered) {
-        hold.triggered = true;
-        completeHold(btn, orb);
-        return;
-      }
-      hold.frame = requestAnimationFrame(step);
-    };
-    hold.frame = requestAnimationFrame(step);
-    state.holdStates.set(btn, hold);
-  }
-
-  function finishHold(btn, commit) {
-    const hold = state.holdStates.get(btn);
-    if (!hold) return;
-    if (hold.frame) cancelAnimationFrame(hold.frame);
-    state.holdStates.delete(btn);
-    if (!hold.triggered) {
-      resetHoldVisuals(btn);
-    }
-  }
-
-  function completeHold(btn, orb) {
-    resetHoldVisuals(btn);
+  function handleOrbGuess(btn, orb) {
+    if (btn.disabled || !state.runActive || state.inputLocked) return;
     btn.disabled = true;
     service.onGuess(orb);
   }
 
-  function resetHoldVisuals(btn) {
-    btn.style.setProperty("--hold-progress", "0");
-    btn.style.setProperty("--hold-active", "0");
+  function clearInputLockTimer() {
+    if (!state.inputLockTimer) return;
+    clearTimeout(state.inputLockTimer);
+    state.inputLockTimer = null;
+  }
+
+  function setInputLock(active, durationMs) {
+    if (!elements.orbGrid) return;
+    if (active) {
+      clearInputLockTimer();
+      state.inputLocked = true;
+      elements.orbGrid.classList.add("input-locked");
+      if (durationMs) {
+        state.inputLockTimer = setTimeout(() => {
+          state.inputLockTimer = null;
+          setInputLock(false);
+        }, durationMs);
+      }
+    } else {
+      clearInputLockTimer();
+      state.inputLocked = false;
+      elements.orbGrid.classList.remove("input-locked");
+    }
+  }
+
+  function isOrbAllowed(orb) {
+    if (!state.allowedOrbs) return true;
+    return state.allowedOrbs.has(ensureOrb(orb));
+  }
+
+  function setAllowedOrbs(level) {
+    if (level && Array.isArray(level.allowed) && level.allowed.length) {
+      state.allowedOrbs = new Set(level.allowed.map(ensureOrb));
+    } else {
+      state.allowedOrbs = null;
+    }
+    applyOrbButtonAvailability();
+  }
+
+  function applyOrbButtonAvailability() {
+    state.orbButtons.forEach((btn, orb) => {
+      if (state.runActive) {
+        if (!isOrbAllowed(orb)) {
+          btn.disabled = true;
+        } else if (!btn.classList.contains("incorrect") && !btn.classList.contains("correct") && !btn.classList.contains("assisted")) {
+          btn.disabled = false;
+        }
+      } else {
+        btn.disabled = false;
+      }
+    });
   }
 
   function activateHintOverlay(order, itemId) {

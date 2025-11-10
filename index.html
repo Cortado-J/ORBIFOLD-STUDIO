@@ -71,12 +71,9 @@
 
     #pattern-view {
       position: relative;
-      flex: 1 1 50%;
+      flex: 1 1 52%;
       min-height: 45vh;
       background: repeating-conic-gradient(from 45deg, rgba(24, 24, 38, 0.65) 0deg 45deg, rgba(12, 12, 20, 0.9) 45deg 90deg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
       overflow: hidden;
     }
 
@@ -135,7 +132,7 @@
       text-transform: uppercase;
     }
     #play-ui {
-      flex: 1 1 50%;
+      flex: 1 1 48%;
       padding: 20px 28px 28px;
       background: rgba(12, 12, 22, 0.94);
       display: flex;
@@ -146,38 +143,37 @@
 
     #hud-row {
       display: flex;
-      gap: 18px;
-      align-items: flex-end;
+      gap: 16px;
+      align-items: stretch;
       flex-wrap: wrap;
       min-height: 0;
     }
 
     .hud-tile {
       flex: 0 0 auto;
-      width: min(25vw, 240px);
-      height: min(50vh, 240px);
-      min-width: 140px;
-      min-height: 140px;
+      width: clamp(140px, 20vw, 180px);
+      min-height: 88px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 6px;
       background: rgba(33, 36, 64, 0.78);
       border: 1px solid rgba(98, 112, 196, 0.45);
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 16px 32px rgba(10, 12, 32, 0.35);
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 12px 24px rgba(10, 12, 32, 0.3);
     }
 
     .hud-label {
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.12em;
       color: rgba(173, 178, 228, 0.72);
     }
 
     .hud-value {
-      font-size: 28px;
+      font-size: 24px;
       font-weight: 600;
       color: #f4f6ff;
     }
@@ -244,8 +240,6 @@
       letter-spacing: 0.04em;
       cursor: pointer;
       transition: transform 0.12s ease, box-shadow 0.12s ease, border 0.12s ease;
-      --hold-progress: 0;
-      --hold-active: 0;
     }
 
     .orb-button:hover:not(:disabled),
@@ -264,20 +258,14 @@
       box-shadow: none;
     }
 
-    .orb-button .hold-ring {
-      pointer-events: none;
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: conic-gradient(from -90deg, rgba(245, 198, 92, 0.85) calc(var(--hold-progress) * 100%), transparent 0%);
-      opacity: calc(var(--hold-active));
-      transition: opacity 0.12s ease;
-      mix-blend-mode: screen;
-    }
-
     .orb-button .label {
       position: relative;
       z-index: 2;
+    }
+
+    #orbifold-grid.input-locked .orb-button:not(.incorrect):not(.correct):not(.assisted):not(:disabled) {
+      pointer-events: none;
+      opacity: 0.6;
     }
 
     .orb-button.correct {
@@ -479,8 +467,8 @@
       }
 
       .hud-tile {
-        width: min(40vw, 200px);
-        height: min(45vh, 220px);
+        width: clamp(140px, 28vw, 200px);
+        min-height: 84px;
       }
 
       .orb-button {
@@ -516,8 +504,8 @@
       }
 
       .hud-tile {
-        width: min(48vw, 180px);
-        height: min(40vh, 200px);
+        width: clamp(140px, 40vw, 180px);
+        min-height: 80px;
       }
 
       #orbifold-grid {
