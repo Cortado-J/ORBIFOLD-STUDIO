@@ -261,14 +261,19 @@
     }
 
     startRun(levelId, options) {
+      console.log("[DEBUG] startRun: Starting with levelId:", levelId);
       const level = findLevel(levelId);
       if (!level) {
+        console.error("[DEBUG] startRun: Unknown level:", levelId);
         throw new Error(`Unknown level: ${levelId}`);
       }
+      console.log("[DEBUG] startRun: Found level:", level);
 
       const runOptions = options || {};
       const items = runOptions.items || this.selectItemsForLevel(level, runOptions);
+      console.log("[DEBUG] startRun: Selected items count:", items?.length);
       if (!items || items.length === 0) {
+        console.error("[DEBUG] startRun: No pattern items available");
         throw new Error(`No pattern items available for level ${levelId}`);
       }
       if (items.length < level.poolSize) {
@@ -276,6 +281,7 @@
       }
 
       const sampled = items.slice(0, level.poolSize);
+      console.log("[DEBUG] startRun: Sampled items:", sampled.length);
       this.runState = createRunState(sampled, level.id, level.runSeconds);
       this.runState.status = GamePhase.RUNNING;
       this.currentLevel = level;
@@ -286,13 +292,18 @@
       this.disabledOrbs = new Set();
       this.telemetryBuffer = [];
 
+      console.log("[DEBUG] startRun: About to emit telemetry");
       this.emitTelemetry("runStart", { levelId: level.id, runSeconds: level.runSeconds });
+      console.log("[DEBUG] startRun: About to emit RUN_STARTED event");
       this.emitter.emit(EVENTS.RUN_STARTED, {
         runState: eventPayload(this.runState),
         level: eventPayload(level),
       });
+      console.log("[DEBUG] startRun: RUN_STARTED event emitted");
 
+      console.log("[DEBUG] startRun: About to activateCurrentItem");
       this.activateCurrentItem();
+      console.log("[DEBUG] startRun: activateCurrentItem completed");
       return eventPayload(this.runState);
     }
 
@@ -595,22 +606,28 @@
     }
 
     activateCurrentItem() {
+      console.log("[DEBUG] activateCurrentItem: Starting");
       const item = this.getCurrentItem();
+      console.log("[DEBUG] activateCurrentItem: getCurrentItem result:", item);
       if (!item) {
+        console.log("[DEBUG] activateCurrentItem: No item, ending run");
         this.endRun({ reason: "no-more-items" });
         return;
       }
+      console.log("[DEBUG] activateCurrentItem: Creating item result and hint state");
       this.currentResult = createItemResult(item);
       this.currentHintState = createHintState();
       this.currentItemStartedAt = this.clock.now();
       this.currentItemStatus = ItemStatus.ACTIVE;
       this.disabledOrbs.clear();
 
+      console.log("[DEBUG] activateCurrentItem: About to emit ITEM_ACTIVE event");
       this.emitter.emit(EVENTS.ITEM_ACTIVE, {
         item,
         index: this.runState.index,
         runState: eventPayload(this.runState),
       });
+      console.log("[DEBUG] activateCurrentItem: ITEM_ACTIVE event emitted");
     }
 
     handleRunTimeout() {

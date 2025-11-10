@@ -142,6 +142,7 @@
     genome.group = group;
     genome.motifScale = genome.motifScale || 80;
     genome.seedMotifScale = genome.motifScale;
+    console.log("[DEBUG] createGenomeForOrb: orb =", orb, "group =", group, "initial numShapes =", genome.numShapes, "shapes.length =", genome.shapes?.length);
     return genome;
   }
 
@@ -216,11 +217,24 @@
   }
 
   function bindControls() {
+    console.log("[DEBUG] bindControls: Starting to bind controls");
+    console.log("[DEBUG] bindControls: setupStart element:", elements.setupStart);
+    console.log("[DEBUG] bindControls: setupLevelSelect element:", elements.setupLevelSelect);
+    
     elements.setupStart?.addEventListener("click", () => {
-      if (state.runActive) return;
+      console.log("[DEBUG] setupStart clicked");
+      if (state.runActive) {
+        console.log("[DEBUG] setupStart: runActive is true, returning");
+        return;
+      }
       const levelId = elements.setupLevelSelect?.value;
-      if (!levelId) return;
+      console.log("[DEBUG] setupStart: selected levelId:", levelId);
+      if (!levelId) {
+        console.log("[DEBUG] setupStart: no levelId selected, returning");
+        return;
+      }
       try {
+        console.log("[DEBUG] setupStart: calling service.startRun with", levelId);
         service.startRun(levelId);
       } catch (err) {
         console.error("Unable to start run", err);
@@ -233,7 +247,9 @@
     });
 
     elements.setupLevelSelect?.addEventListener("change", () => {
+      console.log("[DEBUG] setupLevelSelect: change event fired");
       const level = GameConfig.LEVELS.find(l => l.id === elements.setupLevelSelect.value);
+      console.log("[DEBUG] setupLevelSelect: selected level:", level);
       state.level = level || null;
     });
 
@@ -242,13 +258,21 @@
       if (!Number.isInteger(state.nextHintOrder)) return;
       service.onHintRequest(state.nextHintOrder);
     });
+    
+    console.log("[DEBUG] bindControls: Finished binding controls");
   }
 
   function refreshLevelSelect() {
+    console.log("[DEBUG] refreshLevelSelect: Starting");
     const unlocked = new Set(service.progress?.unlockedLevels || ["L1-rotate"]);
+    console.log("[DEBUG] refreshLevelSelect: unlocked levels:", [...unlocked]);
     const select = elements.setupLevelSelect;
-    if (!select) return;
+    if (!select) {
+      console.log("[DEBUG] refreshLevelSelect: select element not found");
+      return;
+    }
     select.innerHTML = "";
+    console.log("[DEBUG] refreshLevelSelect: clearing select options");
     for (const level of GameConfig.LEVELS) {
       const option = document.createElement("option");
       option.value = level.id;
@@ -258,15 +282,20 @@
         option.textContent += " (Locked)";
       }
       select.appendChild(option);
+      console.log("[DEBUG] refreshLevelSelect: added option", level.id, option.disabled ? "(locked)" : "(unlocked)");
     }
     const firstEnabled = [...select.options].find(opt => !opt.disabled);
+    console.log("[DEBUG] refreshLevelSelect: first enabled option:", firstEnabled?.value);
     if (firstEnabled) {
       select.value = firstEnabled.value;
       state.level = GameConfig.LEVELS.find(l => l.id === firstEnabled.value) || null;
+      console.log("[DEBUG] refreshLevelSelect: set state.level to:", state.level?.id);
       showSetupScreen();
     } else {
       state.level = null;
+      console.log("[DEBUG] refreshLevelSelect: no enabled options found, set state.level to null");
     }
+    console.log("[DEBUG] refreshLevelSelect: Finished");
   }
 
   function updateHudIdle() {
@@ -300,11 +329,14 @@
     });
 
     service.on(events.ITEM_ACTIVE, ({ item, index, runState }) => {
+      console.log("[DEBUG] ITEM_ACTIVE event received:", { item: item?.id, index, runState });
       state.currentItem = item;
       state.runState = runState;
       state.disabledOrbs.clear();
       resetHintUiForItem(item);
+      console.log("[DEBUG] ITEM_ACTIVE: About to call activateItem");
       activateItem(item, index, runState.items.length);
+      console.log("[DEBUG] ITEM_ACTIVE: activateItem completed");
     });
 
     service.on(events.HINT_USED, ({ order }) => {
@@ -344,34 +376,48 @@
   }
 
   function activateItem(item, index, total) {
+    console.log("[DEBUG] activateItem: Starting with item:", item?.id);
     state.timers.itemStart = performance.now();
     setInputLock(false);
     state.orbButtons.forEach(btn => {
       btn.classList.remove("incorrect", "correct", "assisted");
     });
     applyOrbButtonAvailability();
+    console.log("[DEBUG] activateItem: About to call renderPatternForItem");
     renderPatternForItem(item);
+    console.log("[DEBUG] activateItem: renderPatternForItem completed");
     service.onItemShown?.(item.id);
+    console.log("[DEBUG] activateItem: Completed");
   }
 
   function renderPatternForItem(item) {
-    if (!item) return;
+    console.log("[DEBUG] renderPatternForItem: Starting with item:", item?.id);
+    if (!item) {
+      console.log("[DEBUG] renderPatternForItem: No item provided");
+      return;
+    }
+    console.log("[DEBUG] renderPatternForItem: Creating base genome");
     state.baseGenome = cloneDeep(item.genome || createGenomeForOrb(item.truth));
     state.currentGenome = scaleGenomeForView(state.baseGenome);
     state.showGuides = false;
     global.showSymmetryGuides = false;
+    console.log("[DEBUG] renderPatternForItem: About to call queuePatternRender");
     queuePatternRender();
+    console.log("[DEBUG] renderPatternForItem: queuePatternRender completed");
   }
 
   function scaleGenomeForView(genome) {
+    console.log("[DEBUG] scaleGenomeForView: input genome numShapes =", genome.numShapes, "shapes.length =", genome.shapes?.length);
     const container = elements.patternView;
     if (!container) return cloneDeep(genome);
     const rect = container.getBoundingClientRect();
     const base = cloneDeep(genome);
     const baseScale = genome.seedMotifScale || genome.motifScale || 1;
-    const cell = estimateCellSize(genome);
-    const horizontalSpan = Math.max(1, cell.w) * baseScale * PATTERN_REPEATS_X;
-    const verticalSpan = Math.max(1, cell.h) * baseScale * PATTERN_REPEATS_Y;
+    const unitCell = estimateCellSize({ group: genome.group, motifScale: 1 });
+    const cellWidth = Math.max(1, unitCell.w) * baseScale;
+    const cellHeight = Math.max(1, unitCell.h) * baseScale;
+    const horizontalSpan = cellWidth * PATTERN_REPEATS_X;
+    const verticalSpan = cellHeight * PATTERN_REPEATS_Y;
     const scaleFactor = Math.min(rect.width / horizontalSpan, rect.height / verticalSpan);
     base.motifScale = baseScale * (Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1);
     base.seedMotifScale = baseScale;
@@ -650,8 +696,14 @@
   }
 
   function renderPattern(p5) {
+    console.log("[DEBUG] renderPattern: Starting");
+    console.log("[DEBUG] renderPattern: state.currentGenome:", !!state.currentGenome);
     p5.background(BACKGROUND_COLOR);
-    if (!state.currentGenome) return;
+    if (!state.currentGenome) {
+      console.log("[DEBUG] renderPattern: No currentGenome, returning");
+      return;
+    }
+    console.log("[DEBUG] renderPattern: Creating clone and graphics");
     const clone = cloneDeep(state.currentGenome);
     const pg = p5.createGraphics(p5.width, p5.height);
     pg.background(BACKGROUND_COLOR);
@@ -659,10 +711,18 @@
     pg.translate(pg.width / 2, pg.height / 2);
     const prior = global.showSymmetryGuides;
     global.showSymmetryGuides = state.showGuides;
-    drawWallpaperOn(pg, clone);
+    console.log("[DEBUG] renderPattern: About to call drawWallpaperOn");
+    try {
+      drawWallpaperOn(pg, clone);
+      console.log("[DEBUG] renderPattern: drawWallpaperOn completed");
+    } catch (err) {
+      console.error("[DEBUG] renderPattern: drawWallpaperOn threw error:", err);
+      throw err;
+    }
     global.showSymmetryGuides = prior;
     pg.pop();
     p5.image(pg, 0, 0, p5.width, p5.height);
+    console.log("[DEBUG] renderPattern: Completed");
   }
 
   function onWindowResized(p5) {
@@ -690,12 +750,19 @@ function queueP5Redraw(p5) {
 }
 
 function ensureP5Globals(p5Instance) {
-    if (!p5Instance || GameAppGlobal._p5GlobalsReady) return;
+    console.log("[DEBUG] ensureP5Globals: Starting");
+    if (!p5Instance || GameAppGlobal._p5GlobalsReady) {
+      console.log("[DEBUG] ensureP5Globals: Early return - p5Instance:", !!p5Instance, "_p5GlobalsReady:", GameAppGlobal._p5GlobalsReady);
+      return;
+    }
 
     const bind = (fn) => (...args) => fn.apply(p5Instance, args);
     const maybeAssign = (name, value) => {
       if (typeof global[name] === "undefined") {
         global[name] = value;
+        console.log("[DEBUG] ensureP5Globals: Assigned global", name, "=", value);
+      } else {
+        console.log("[DEBUG] ensureP5Globals: Global", name, "already exists, skipping");
       }
     };
 
@@ -714,9 +781,11 @@ function ensureP5Globals(p5Instance) {
       createVector: bind(p5Instance.createVector),
     };
 
+    console.log("[DEBUG] ensureP5Globals: Processing p5Aliases");
     Object.entries(p5Aliases).forEach(([name, fn]) => {
       if (typeof fn === "function" && typeof global[name] !== "function") {
         global[name] = fn;
+        console.log("[DEBUG] ensureP5Globals: Bound p5 function", name);
       }
     });
 
@@ -737,20 +806,30 @@ function ensureP5Globals(p5Instance) {
       exp: Math.exp,
     };
 
+    console.log("[DEBUG] ensureP5Globals: Processing mathAliases");
     Object.entries(mathAliases).forEach(([name, fn]) => {
       if (typeof global[name] !== "function") {
         global[name] = fn;
       }
     });
 
+    console.log("[DEBUG] ensureP5Globals: Assigning constants");
     maybeAssign("PI", Math.PI);
     maybeAssign("TWO_PI", Math.PI * 2);
     maybeAssign("HALF_PI", Math.PI / 2);
     maybeAssign("QUARTER_PI", Math.PI / 4);
     maybeAssign("HSB", p5Instance.HSB);
     maybeAssign("RGB", p5Instance.RGB);
+    // Restore CLOSE properly - it was causing issues before but now we know the rendering works
+    if (p5Instance.CLOSE !== undefined) {
+      maybeAssign("CLOSE", p5Instance.CLOSE);
+    }
 
+    // Assign functions from pattern.js
+    maybeAssign("estimateCellSize", window.estimateCellSize);
+    
     GameAppGlobal._p5GlobalsReady = true;
+    console.log("[DEBUG] ensureP5Globals: Completed, _p5GlobalsReady set to true");
   }
 
   function installP5() {
@@ -764,37 +843,64 @@ function ensureP5Globals(p5Instance) {
     ensureP5Globals(instance);
     GameAppGlobal._p5Installed = true;
     global.redrawPattern = () => {
+      console.log("[DEBUG] redrawPattern: Starting");
       if (GameAppGlobal._p5Instance) {
+        console.log("[DEBUG] redrawPattern: About to call p5.redraw()");
         GameAppGlobal._p5Instance.redraw();
+        console.log("[DEBUG] redrawPattern: p5.redraw() completed");
+      } else {
+        console.log("[DEBUG] redrawPattern: No p5 instance available");
       }
+      console.log("[DEBUG] redrawPattern: Completed");
     };
   }
 
 function queuePatternRender() {
-  if (typeof global.redrawPattern === "function") {
-    global.redrawPattern();
+    console.log("[DEBUG] queuePatternRender: Starting");
+    console.log("[DEBUG] queuePatternRender: global.redrawPattern type:", typeof global.redrawPattern);
+    if (typeof global.redrawPattern === "function") {
+      console.log("[DEBUG] queuePatternRender: Calling global.redrawPattern");
+      global.redrawPattern();
+      console.log("[DEBUG] queuePatternRender: global.redrawPattern completed");
+    } else {
+      console.log("[DEBUG] queuePatternRender: global.redrawPattern is not a function");
+    }
   }
-}
 
   function init() {
+    console.log("[DEBUG] init: Starting initialization");
     installP5();
+    console.log("[DEBUG] init: installP5 completed");
 
     if (!GameAppGlobal._initialized) {
+      console.log("[DEBUG] init: First time initialization");
       cacheDom();
+      console.log("[DEBUG] init: cacheDom completed");
       renderOrbifoldGrid();
+      console.log("[DEBUG] init: renderOrbifoldGrid completed");
       bindControls();
+      console.log("[DEBUG] init: bindControls completed");
       attachServiceEvents();
+      console.log("[DEBUG] init: attachServiceEvents completed");
       startFrameLoop();
+      console.log("[DEBUG] init: startFrameLoop completed");
       exposeVersion();
+      console.log("[DEBUG] init: exposeVersion completed");
       GameAppGlobal._initialized = true;
+      console.log("[DEBUG] init: _initialized set to true");
     } else if (!elements.setupLevelSelect) {
+      console.log("[DEBUG] init: Already initialized but missing setupLevelSelect, calling cacheDom");
       cacheDom();
     }
 
     refreshLevelSelect();
+    console.log("[DEBUG] init: refreshLevelSelect completed");
     updateHudIdle();
+    console.log("[DEBUG] init: updateHudIdle completed");
     showSetupScreen();
+    console.log("[DEBUG] init: showSetupScreen completed");
     global.GameTests?.runGameTests?.();
+    console.log("[DEBUG] init: Initialization complete");
   }
 
   GameAppGlobal.init = init;

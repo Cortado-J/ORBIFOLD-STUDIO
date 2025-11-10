@@ -80,8 +80,11 @@ function buildBaseTransforms(spec, a) {
 
 function buildTransformSet(spec, a) {
   const depth = Math.max(1, spec.compositionDepth || 1);
+  console.log("[DEBUG] buildTransformSet: Starting with depth:", depth, "group:", spec.group);
   const gens = buildBaseTransforms(spec, a);
+  console.log("[DEBUG] buildTransformSet: Base transforms count:", gens.length);
   const seed = dedup(gens);
+  console.log("[DEBUG] buildTransformSet: After dedup, seed count:", seed.length);
   let current = seed.slice();
   let all = seed.slice();
   for (let d = 2; d <= depth; d++) {
@@ -93,10 +96,12 @@ function buildTransformSet(spec, a) {
       }
     }
     const uniq = dedup(next.concat(all));
+    console.log("[DEBUG] buildTransformSet: Depth", d, "- generated", next.length, "combinations, total unique:", uniq.length);
     if (uniq.length === all.length) break;
     all = uniq;
     current = next;
   }
+  console.log("[DEBUG] buildTransformSet: Final transforms count:", all.length);
   return all;
 
   function dedup(arr) {
