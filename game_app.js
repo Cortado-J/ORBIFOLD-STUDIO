@@ -161,8 +161,9 @@
   function cacheDom() {
     elements.appVersion = document.getElementById("app-version");
     elements.setupScreen = document.getElementById("setup-screen");
-    elements.setupLevelSelect = document.getElementById("setup-level-select");
     elements.setupStart = document.getElementById("setup-start");
+    elements.stagePath = document.getElementById("stage-path");
+    elements.stageNextLabel = document.getElementById("stage-next-label");
     elements.hintButton = document.getElementById("hint-button");
     elements.hintNumber = elements.hintButton ? elements.hintButton.querySelector(".hint-number") : null;
     elements.hintOverlay = document.getElementById("hint-overlay");
@@ -219,38 +220,23 @@
   function bindControls() {
     console.log("[DEBUG] bindControls: Starting to bind controls");
     console.log("[DEBUG] bindControls: setupStart element:", elements.setupStart);
-    console.log("[DEBUG] bindControls: setupLevelSelect element:", elements.setupLevelSelect);
-    
+
     elements.setupStart?.addEventListener("click", () => {
       console.log("[DEBUG] setupStart clicked");
       if (state.runActive) {
         console.log("[DEBUG] setupStart: runActive is true, returning");
         return;
       }
-      const levelId = elements.setupLevelSelect?.value;
-      console.log("[DEBUG] setupStart: selected levelId:", levelId);
-      if (!levelId) {
-        console.log("[DEBUG] setupStart: no levelId selected, returning");
+      if (!state.level) {
+        console.log("[DEBUG] setupStart: no current level set, returning");
         return;
       }
       try {
-        console.log("[DEBUG] setupStart: calling service.startRun with", levelId);
-        service.startRun(levelId);
+        console.log("[DEBUG] setupStart: calling service.startRun with", state.level.id);
+        service.startRun(state.level.id);
       } catch (err) {
         console.error("Unable to start run", err);
       }
-    });
-
-    elements.summaryClose?.addEventListener("click", () => {
-      hideSummary();
-      showSetupScreen();
-    });
-
-    elements.setupLevelSelect?.addEventListener("change", () => {
-      console.log("[DEBUG] setupLevelSelect: change event fired");
-      const level = GameConfig.LEVELS.find(l => l.id === elements.setupLevelSelect.value);
-      console.log("[DEBUG] setupLevelSelect: selected level:", level);
-      state.level = level || null;
     });
 
     elements.hintButton?.addEventListener("click", () => {
@@ -258,44 +244,141 @@
       if (!Number.isInteger(state.nextHintOrder)) return;
       service.onHintRequest(state.nextHintOrder);
     });
+
+    elements.summaryClose?.addEventListener("click", () => {
+      hideSummary();
+      showSetupScreen();
+    });
     
     console.log("[DEBUG] bindControls: Finished binding controls");
   }
 
   function refreshLevelSelect() {
-    console.log("[DEBUG] refreshLevelSelect: Starting");
-    const unlocked = new Set(service.progress?.unlockedLevels || ["L1-rotate"]);
-    console.log("[DEBUG] refreshLevelSelect: unlocked levels:", [...unlocked]);
-    const select = elements.setupLevelSelect;
-    if (!select) {
-      console.log("[DEBUG] refreshLevelSelect: select element not found");
+    console.log("[DEBUG] refreshLevelSelect: rendering stage path");
+    const container = elements.stagePath;
+    if (!container) {
+      console.log("[DEBUG] refreshLevelSelect: stagePath element missing");
       return;
     }
-    select.innerHTML = "";
-    console.log("[DEBUG] refreshLevelSelect: clearing select options");
-    for (const level of GameConfig.LEVELS) {
-      const option = document.createElement("option");
-      option.value = level.id;
-      option.textContent = `${level.label}`;
-      if (!unlocked.has(level.id)) {
-        option.disabled = true;
-        option.textContent += " (Locked)";
-      }
-      select.appendChild(option);
-      console.log("[DEBUG] refreshLevelSelect: added option", level.id, option.disabled ? "(locked)" : "(unlocked)");
-    }
-    const firstEnabled = [...select.options].find(opt => !opt.disabled);
-    console.log("[DEBUG] refreshLevelSelect: first enabled option:", firstEnabled?.value);
-    if (firstEnabled) {
-      select.value = firstEnabled.value;
-      state.level = GameConfig.LEVELS.find(l => l.id === firstEnabled.value) || null;
-      console.log("[DEBUG] refreshLevelSelect: set state.level to:", state.level?.id);
-      showSetupScreen();
-    } else {
+
+    const progress = service.progress || {};
+    const modeId = progress.selectedModeId || GameConfig.DEFAULT_MODE_ID;
+    const allLevels = GameConfig.LEVELS.filter(lvl => lvl.modeId === modeId).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    if (allLevels.length === 0) {
+      container.innerHTML = "<p>No training levels configured.</p>";
+      elements.stageNextLabel.textContent = "Next up: not available";
+      elements.setupStart.disabled = true;
       state.level = null;
-      console.log("[DEBUG] refreshLevelSelect: no enabled options found, set state.level to null");
+      return;
     }
-    console.log("[DEBUG] refreshLevelSelect: Finished");
+
+    const unlocked = new Set(progress.unlockedLevels || []);
+    let currentLevelId = progress.lastLevelId && allLevels.some(lvl => lvl.id === progress.lastLevelId)
+      ? progress.lastLevelId
+      : allLevels[0].id;
+    let currentIndex = allLevels.findIndex(lvl => lvl.id === currentLevelId);
+    if (currentIndex < 0) {
+      currentIndex = 0;
+      currentLevelId = allLevels[0].id;
+    }
+
+    const statusById = {};
+    allLevels.forEach((lvl, idx) => {
+      let status;
+      if (idx < currentIndex) {
+        status = "completed";
+      } else if (idx === currentIndex) {
+        status = "current";
+      } else {
+        status = unlocked.has(lvl.id) ? "pending" : "locked";
+      }
+      statusById[lvl.id] = status;
+    });
+
+    const stagesMap = new Map();
+    allLevels.forEach((lvl) => {
+      const key = lvl.stageId || "stage-unknown";
+      if (!stagesMap.has(key)) {
+        stagesMap.set(key, {
+          id: key,
+          label: lvl.stageLabel || lvl.stageCode || "Stage",
+          order: lvl.stageOrder || 0,
+          levels: [],
+        });
+      }
+      stagesMap.get(key).levels.push(lvl);
+    });
+
+    const stages = Array.from(stagesMap.values()).sort((a, b) => (a.order || 0) - (b.order || 0));
+    container.innerHTML = "";
+
+    let nextLevel = allLevels[currentIndex] || null;
+    state.level = nextLevel || null;
+
+    stages.forEach((stage, index) => {
+      const node = document.createElement("div");
+      node.className = "stage-node";
+
+      const levelStatuses = stage.levels.map(lvl => statusById[lvl.id]);
+      const stageCompleted = levelStatuses.every(status => status === "completed");
+      const stageCurrent = levelStatuses.includes("current");
+      if (stageCompleted) node.classList.add("completed");
+      if (stageCurrent) node.classList.add("current");
+
+      const marker = document.createElement("div");
+      marker.className = "stage-marker";
+      if (stageCompleted) marker.classList.add("completed");
+      if (stageCurrent) marker.classList.add("current");
+      marker.textContent = `${index + 1}`;
+      node.appendChild(marker);
+
+      const details = document.createElement("div");
+      details.className = "stage-details";
+
+      const title = document.createElement("div");
+      title.className = "stage-title";
+      title.textContent = stage.label;
+      details.appendChild(title);
+
+      const summarySource = stage.levels.find(lvl => lvl.summary);
+      if (summarySource) {
+        const desc = document.createElement("div");
+        desc.className = "stage-desc";
+        desc.textContent = summarySource.summary;
+        details.appendChild(desc);
+      }
+
+      const pills = document.createElement("div");
+      pills.className = "level-label";
+      stage.levels.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((lvl) => {
+        const pill = document.createElement("span");
+        pill.className = "level-pill";
+        const status = statusById[lvl.id];
+        if (status === "completed") pill.classList.add("completed");
+        if (status === "current") pill.classList.add("current");
+        pill.textContent = lvl.label || lvl.code || lvl.id;
+        pills.appendChild(pill);
+      });
+      details.appendChild(pills);
+
+      node.appendChild(details);
+      container.appendChild(node);
+    });
+
+    if (elements.stageNextLabel) {
+      if (state.level) {
+        const text = `Next up: <strong>${state.level.stageLabel || state.level.stageCode}</strong> · ${state.level.label}`;
+        elements.stageNextLabel.innerHTML = text;
+      } else {
+        elements.stageNextLabel.textContent = "Next up: complete";
+      }
+    }
+
+    if (elements.setupStart) {
+      elements.setupStart.disabled = !state.level;
+    }
+
+    console.log("[DEBUG] refreshLevelSelect: Stage path rendered, next level:", state.level?.id);
   }
 
   function updateHudIdle() {

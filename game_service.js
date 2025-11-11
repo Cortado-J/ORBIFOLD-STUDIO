@@ -87,12 +87,15 @@
   }
 
   function findLevel(levelId) {
-    return getLevels().find(lvl => lvl.id === levelId) || null;
+    return GameConfig.getLevel(levelId);
   }
 
   function getNextLevel(currentLevelId) {
-    const levels = getLevels();
-    const idx = levels.findIndex(l => l.id === currentLevelId);
+    const current = findLevel(currentLevelId);
+    if (!current) return null;
+    const levels = getLevels().filter(lvl => lvl.modeId === current.modeId);
+    levels.sort((a, b) => (a.order || 0) - (b.order || 0));
+    const idx = levels.findIndex(lvl => lvl.id === currentLevelId);
     if (idx < 0) return null;
     return levels[idx + 1] || null;
   }
@@ -209,6 +212,23 @@
       deepFreeze(this.runConfig);
 
       this.progress = this.loadProgress();
+      if (!Array.isArray(this.progress.unlockedLevels)) {
+        this.progress.unlockedLevels = [];
+      }
+      if (!this.progress.selectedModeId) {
+        this.progress.selectedModeId = GameConfig.DEFAULT_MODE_ID;
+      }
+      if (!this.progress.lastLevelId || !findLevel(this.progress.lastLevelId)) {
+        this.progress.lastLevelId = GameConfig.DEFAULT_LEVEL_ID;
+      }
+      GameConfig.ALWAYS_UNLOCKED_LEVEL_IDS.forEach((id) => {
+        if (!this.progress.unlockedLevels.includes(id)) {
+          this.progress.unlockedLevels.push(id);
+        }
+      });
+      if (this.progress.lastLevelId && !this.progress.unlockedLevels.includes(this.progress.lastLevelId)) {
+        this.progress.unlockedLevels.push(this.progress.lastLevelId);
+      }
 
       this.emitter = createEmitter();
 
@@ -261,13 +281,14 @@
     }
 
     startRun(levelId, options) {
-      console.log("[DEBUG] startRun: Starting with levelId:", levelId);
-      const level = findLevel(levelId);
+      const fallbackLevelId = this.progress?.lastLevelId || GameConfig.DEFAULT_LEVEL_ID;
+      const resolvedLevelId = levelId || fallbackLevelId;
+      console.log("[DEBUG] startRun: Starting with levelId:", resolvedLevelId);
+      const level = findLevel(resolvedLevelId);
       if (!level) {
-        console.error("[DEBUG] startRun: Unknown level:", levelId);
-        throw new Error(`Unknown level: ${levelId}`);
+        const available = getLevels().map(lvl => lvl.id).join(", ");
+        throw new Error(`Unknown level id: ${resolvedLevelId}. Available levels: ${available}`);
       }
-      console.log("[DEBUG] startRun: Found level:", level);
 
       const runOptions = options || {};
       const items = runOptions.items || this.selectItemsForLevel(level, runOptions);
@@ -681,11 +702,14 @@
 
       if (gatePassed) {
         const nextLevel = getNextLevel(summary.levelId);
-        if (nextLevel) {
-          if (!this.progress.unlockedLevels.includes(nextLevel.id)) {
-            this.progress.unlockedLevels.push(nextLevel.id);
-          }
+        if (nextLevel && !this.progress.unlockedLevels.includes(nextLevel.id)) {
+          this.progress.unlockedLevels.push(nextLevel.id);
+          this.progress.lastLevelId = nextLevel.id;
+        } else {
+          this.progress.lastLevelId = summary.levelId;
         }
+      } else {
+        this.progress.lastLevelId = summary.levelId;
       }
     }
 

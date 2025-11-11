@@ -438,7 +438,7 @@
       color: #f0f2ff;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 20px;
       box-shadow: 0 28px 48px rgba(10, 14, 40, 0.6);
     }
 
@@ -448,20 +448,127 @@
       letter-spacing: 0.04em;
     }
 
-    .setup-card label {
-      font-size: 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(200, 206, 255, 0.7);
+    .stage-path {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 6px;
     }
 
-    #setup-level-select {
-      background: rgba(40, 44, 76, 0.85);
-      border: 1px solid rgba(122, 132, 214, 0.6);
-      color: #e2e5ff;
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 15px;
+    .stage-node {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: start;
+      gap: 12px;
+      position: relative;
+    }
+
+    .stage-marker {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid rgba(136, 150, 255, 0.8);
+      background: rgba(46, 52, 92, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #d7dcff;
+    }
+
+    .stage-marker.current {
+      background: linear-gradient(135deg, #6f7fff, #90a1ff);
+      color: #0b0d1f;
+    }
+
+    .stage-marker.completed {
+      background: rgba(90, 196, 140, 0.9);
+      border-color: rgba(128, 240, 182, 0.95);
+      color: #08150e;
+    }
+
+    .stage-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stage-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #edf0ff;
+    }
+
+    .stage-desc {
+      font-size: 13px;
+      color: rgba(200, 206, 255, 0.75);
+    }
+
+    .level-label {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12px;
+      color: rgba(190, 198, 255, 0.65);
+    }
+
+    .level-pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(86, 94, 160, 0.55);
+      border: 1px solid rgba(118, 136, 220, 0.6);
+    }
+
+    .level-pill.completed {
+      background: rgba(104, 182, 142, 0.4);
+      border-color: rgba(136, 226, 188, 0.7);
+      color: #e5fff4;
+    }
+
+    .level-pill.current {
+      background: linear-gradient(135deg, #6f7fff, #9aa9ff);
+      border-color: rgba(160, 178, 255, 0.9);
+      color: #0b0d1f;
+    }
+
+    .stage-node + .stage-node::before {
+      content: "";
+      grid-column: 1;
+      justify-self: center;
+      width: 2px;
+      height: 18px;
+      background: linear-gradient(to bottom, rgba(112, 118, 192, 0.45), rgba(112, 118, 192, 0));
+      margin-top: -2px;
+    }
+
+    .stage-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .stage-node.completed .stage-title {
+      color: rgba(172, 235, 197, 0.9);
+    }
+
+    .stage-node.current .stage-title {
+      color: #ffffff;
+    }
+
+    .stage-next {
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(200, 206, 255, 0.75);
+    }
+
+    .stage-next strong {
+      color: #f7f8ff;
     }
 
     @media (max-width: 920px) {
@@ -615,10 +722,12 @@
 
     <div id="setup-screen" role="dialog" aria-modal="true" aria-hidden="false">
       <div class="setup-card">
-        <h2>Choose a Level</h2>
-        <label for="setup-level-select">Level</label>
-        <select id="setup-level-select"></select>
-        <button id="setup-start" class="primary-btn">Start Playing</button>
+        <h2>Training Path</h2>
+        <div class="stage-path" id="stage-path" role="list"></div>
+        <div class="stage-actions">
+          <div class="stage-next" id="stage-next-label">Next up: loading…</div>
+          <button id="setup-start" class="primary-btn">Play</button>
+        </div>
       </div>
     </div>
 
